@@ -49,22 +49,21 @@ const navItems = [
   ['saved', 'Պահվածները'], ['news', 'Նորություններ'], ['settings', 'Կարգավորումներ'],
 ]
 
-function Logo() {
-  return <div className="brand"><span className="brand-symbol"><i /><i /><i /></span><span>ARLIS <b>AI</b></span></div>
+function Logo({ onClick }) {
+  const content = <><span className="brand-symbol"><i /><i /><i /></span><span>ARLIS <b>AI</b></span></>
+  return onClick
+    ? <button className="brand brand-home" onClick={onClick} aria-label="Վերադառնալ գլխավոր էջ">{content}</button>
+    : <div className="brand">{content}</div>
 }
 
 function JusticeArtwork() {
-  return (
-    <svg className="justice-art" viewBox="0 0 180 300" aria-hidden="true">
-      <circle cx="90" cy="40" r="18" /><path d="M73 37c8-15 28-15 35 0M78 59c-11 26-17 58-15 93M102 59c13 27 18 58 15 93M62 152l-22 95M118 152l23 95M52 106 25 10M128 106l-25 10M90 58v172M69 230h42M50 91h80M51 91l-27 52h54L51 91ZM129 91l-27 52h54l-27-52ZM24 143c13 8 40 8 54 0M102 143c13 8 40 8 54 0M65 265c15-18 35-18 50 0M48 276h84" />
-    </svg>
-  )
+  return <div className="justice-art" aria-hidden="true"><img src="/lady-justice.png" alt="" /></div>
 }
 
-function Sidebar() {
+function Sidebar({ onHome }) {
   return (
     <aside className="sidebar">
-      <Logo />
+      <Logo onClick={onHome} />
       <button className="new-question"><Icon name="plus" />Նոր հարց</button>
       <nav>{navItems.map(([icon, label], index) => <button className={index === 0 ? 'active' : ''} key={label}><Icon name={icon} />{label}</button>)}</nav>
       <JusticeArtwork />
@@ -108,6 +107,7 @@ function Calendar({ selected, onSelect }) {
 function Timeline({ activeVersion }) {
   return (
     <aside className="timeline-panel">
+      <div className="chronos-art" aria-hidden="true"><img src="/chronos.png" alt="" /></div>
       <header><div className="overline">Օրենսդրության փոփոխություններ</div><h2>ՀՀ աշխատանքային<br />օրենսգիրք</h2><p>Հոդված 113</p></header>
       <div className="timeline" style={{ '--active-index': versions.findIndex(v => v.id === activeVersion.id) }}>
         <div className="timeline-track"><span /></div>
@@ -203,7 +203,7 @@ function ResearchWorkspace({ initialQuestion, initialDate, onBack }) {
   const topResult = researchData?.results?.[0]
   return (
     <main className="app-shell">
-      <Sidebar />
+      <Sidebar onHome={onBack} />
       <section className="workspace">
         <button className="back" onClick={onBack}><Arrow left />Վերադառնալ հարցերին</button>
         <div className="question-label">Ձեր հարցը</div>
