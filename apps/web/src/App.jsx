@@ -212,7 +212,9 @@ function ResearchWorkspace({ initialQuestion, initialDate, onBack }) {
       return response.json()
     }).then(data => { setResearchData(data); setStage(3) }).catch(reason => {
       if (reason.name !== 'AbortError') setError(reason.message)
-    }).finally(() => setLoading(false))
+    }).finally(() => {
+      if (!controller.signal.aborted) setLoading(false)
+    })
     return () => controller.abort()
   }, [question, targetDate])
   const topResult = researchData?.results?.[selectedSourceIndex] || researchData?.results?.[0]
