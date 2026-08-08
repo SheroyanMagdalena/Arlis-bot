@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -76,6 +77,19 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args) -> None:
         pass
 
+    def do_OPTIONS(self) -> None:
+        self.send_response(204)
+        self._send_cors_headers()
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+
+    def do_GET(self) -> None:
+        if self.path == "/api/health":
+            self._send_json({"status": "ok", "index_loaded": True})
+        else:
+            self._send_json({"detail": "Not found"}, status=404)
+
     def do_POST(self) -> None:
         if self.path != "/api/research":
             self._send_json({"detail": "Not found"}, status=404)
@@ -108,8 +122,22 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self._send_cors_headers()
         self.end_headers()
         self.wfile.write(body)
+
+    def _send_cors_headers(self) -> None:
+        allowed_origins = {
+            origin.strip()
+            for origin in os.environ.get(
+                "FRONTEND_ORIGINS", "https://arlis-ai.am"
+            ).split(",")
+            if origin.strip()
+        }
+        origin = self.headers.get("Origin")
+        if origin in allowed_origins:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
 
 
 def main() -> int:
@@ -117,16 +145,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--index", type=Path, default=Path("data/structured/vector_index_demo"))
     parser.add_argument("--model", default=DEFAULT_MODEL)
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8000")))
     args = parser.parse_args()
 
     print(f"Loading index from {args.index} ...")
     INDEX = LocalVectorIndex.load(args.index)
     print("Loading embedding model ...")
     EMBEDDER = LocalEmbedder(args.model)
-    print(f"Ready. POST /api/research on http://127.0.0.1:{args.port}")
+    print(f"Ready. POST /api/research on 0.0.0.0:{args.port}")
 
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    server = ThreadingHTTPServer(("0.0.0.0", args.port), Handler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

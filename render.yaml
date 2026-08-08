@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: arlis-back
+    runtime: python
+    plan: free
+    branch: demo
+    buildCommand: pip install -r requirements.txt && python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')"
+    startCommand: python -m backend.main --index data/structured/render_index
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.5
+      - key: FRONTEND_ORIGINS
+        value: https://arlis-ai.am
+      - key: API_KEY
+        sync: false

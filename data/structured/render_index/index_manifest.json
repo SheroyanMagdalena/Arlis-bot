@@ -1,0 +1,12 @@
+{
+  "format_version": 2,
+  "embedding": {
+    "model_name": "intfloat/multilingual-e5-small",
+    "dimension": 384,
+    "normalize_embeddings": true,
+    "query_prefix": "query: ",
+    "passage_prefix": "passage: ",
+    "pooling": "Pooling({'embedding_dimension': 384, 'pooling_mode': 'mean', 'include_prompt': True})"
+  },
+  "searchable_representation": "act_title+act_type+article_number+text:v1"
+}

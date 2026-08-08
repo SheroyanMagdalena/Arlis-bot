@@ -258,7 +258,7 @@ function ResearchWorkspace({ initialQuestion, initialDate, onBack }) {
   useEffect(() => {
     const controller = new AbortController()
     setLoading(true); setError(''); setResearchData(null); setSelectedSourceIndex(0)
-    fetch('/api/research', {
+    fetch(`${import.meta.env.VITE_API_URL || ''}/api/research`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
       body: JSON.stringify({ question, target_date: targetDate, top_k: 5 }),
     }).then(async response => {
