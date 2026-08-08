@@ -11,6 +11,12 @@ Orchestrates the full "rollback" stage described in the team plan:
    static April-2023 corpus can be trusted for that date, and either use the RAG
    match (GROUNDED_BUT_DATED) or fall back to DeepSeek (EXTERNAL_UNVERIFIED /
    NO_ANSWER).
+5. Non-temporal questions the corpus can't confidently answer also fall back to
+   DeepSeek (EXTERNAL_UNVERIFIED / NO_ANSWER) rather than giving up immediately —
+   DeepSeek is always consulted before the pipeline reports NO_ANSWER. Whatever RAG
+   retrieved (even below the confidence threshold) is passed along as candidate
+   source material, so DeepSeek can ground the answer in real ARLIS excerpts and
+   cite them rather than answering from general knowledge alone.
 
 This is a standalone integration point: it answers using RAG chunk text directly
 until a teammate's `reasoning/answer_generator.py` exists to synthesize a real
@@ -49,29 +55,33 @@ def run_rollback(
     explicit = classify_temporal(question)
     results = index.search(question, embedder, top_k=top_k)
 
-    if (
-        reference_date is None
-        and not explicit.is_temporal
-        and needs_reference_date(question, results)
-    ):
+    # Whether the QUESTION is temporal is a property of the question and the
+    # matched content alone -- it must not depend on whether a caller happens to
+    # supply a reference_date. Some callers (e.g. a UI that always collects a date
+    # up front) pass one on every request, including for non-temporal questions;
+    # if presence-of-date alone flipped is_temporal, every such question would be
+    # wrongly routed as temporal and the VERIFIED tier would never fire.
+    implicit_temporal = not explicit.is_temporal and needs_reference_date(question, results)
+
+    if reference_date is None and implicit_temporal:
         return build_date_clarification()
 
-    is_temporal = explicit.is_temporal or reference_date is not None
+    is_temporal = explicit.is_temporal or implicit_temporal
 
     if not is_temporal:
-        if is_confident(results):
+        if is_confident(question, results):
             return _rag_answer(results, ConfidenceLevel.VERIFIED, reference_date)
-        return _no_answer(reference_date)
+        return _deepseek_answer(question, reference_date, results)
 
     # Temporal: a reference date after the corpus cutoff means the static April-2023
     # snapshot cannot be trusted for this question, regardless of RAG similarity.
     if reference_date is not None and reference_date > CORPUS_CUTOFF_DATE:
-        return _deepseek_answer(question, reference_date)
+        return _deepseek_answer(question, reference_date, results)
 
-    if is_confident(results):
+    if is_confident(question, results):
         return _rag_answer(results, ConfidenceLevel.GROUNDED_BUT_DATED, reference_date)
 
-    return _deepseek_answer(question, reference_date)
+    return _deepseek_answer(question, reference_date, results)
 
 
 def _rag_answer(
@@ -89,8 +99,12 @@ def _rag_answer(
     )
 
 
-def _deepseek_answer(question: str, reference_date: date | None) -> RollbackAnswer:
-    answer = ask_deepseek(question, reference_date=reference_date)
+def _deepseek_answer(
+    question: str,
+    reference_date: date | None,
+    results: list[RetrievalResult],
+) -> RollbackAnswer:
+    answer = ask_deepseek(question, reference_date=reference_date, context_results=results)
     if answer is None:
         return _no_answer(reference_date)
     return RollbackAnswer(
@@ -98,7 +112,7 @@ def _deepseek_answer(question: str, reference_date: date | None) -> RollbackAnsw
         confidence_level=ConfidenceLevel.EXTERNAL_UNVERIFIED,
         disclaimer=DISCLAIMERS[ConfidenceLevel.EXTERNAL_UNVERIFIED],
         source="deepseek",
-        citations=[],
+        citations=results,
         reference_date=reference_date,
     )
 
