@@ -174,6 +174,20 @@ function FrontPage({ onContinue }) {
   )
 }
 
+function ConfidenceMeter({ score, tone, label }) {
+  const percent = Math.round(score * 100)
+  return (
+    <div className={`confidence-meter ${tone}`}>
+      <div className="confidence-meter-track"><div className="confidence-meter-fill" style={{ width: `${percent}%` }} /></div>
+      <span className="confidence-meter-label">{label}՝ {percent}%</span>
+    </div>
+  )
+}
+
+function GeneralKnowledgeBadge() {
+  return <div className="confidence-general"><span className="dot" />Հիմնված է ընդհանուր գիտելիքի վրա</div>
+}
+
 function ResearchWorkspace({ initialQuestion, initialDate, onBack }) {
   const [question, setQuestion] = useState(initialQuestion)
   const [draft, setDraft] = useState('')
@@ -197,10 +211,31 @@ function ResearchWorkspace({ initialQuestion, initialDate, onBack }) {
       return response.json()
     }).then(data => { setResearchData(data); setStage(3) }).catch(reason => {
       if (reason.name !== 'AbortError') setError(reason.message)
-    }).finally(() => setLoading(false))
+    }).finally(() => {
+      if (!controller.signal.aborted) setLoading(false)
+    })
     return () => controller.abort()
   }, [question, targetDate])
   const topResult = researchData?.results?.[0]
+  const renderResultBody = () => {
+    if (loading) return <><h3>Պատրաստվում է աղբյուրներով հիմնավորված պատասխանը…</h3><p>Նախ զտվում և դասակարգվում են իրավական դրույթները, ապա պատասխանը կազմվում է միայն ընտրված աղբյուրներից։</p></>
+    if (error) return <><h3>Չհաջողվեց միանալ իրավական որոնման API-ին</h3><p>{error}</p></>
+    if (topResult && stage === 4) return <><h3>{topResult.act_title}{topResult.article_number ? ` · Հոդված ${topResult.article_number}` : ''}</h3><p>{topResult.text}</p><div className="live-meta"><span>{topResult.act_type || 'Իրավական ակտ'}</span><span>Ուժի մեջ՝ {topResult.valid_from}{topResult.valid_to ? ` — ${topResult.valid_to}` : ''}</span></div></>
+    if (topResult) {
+      const level = researchData.confidence_level
+      return <>
+        <h3>{researchData.simplified_answer ? 'Պատասխան՝ ըստ ընտրված ամսաթվի գործող աղբյուրների' : 'Պարզեցված պատասխանը հասանելի չէ'}</h3>
+        {level === 'VERIFIED' && <ConfidenceMeter score={topResult.similarity_score} tone="olive" label="ԱՐԼԻՍ-ի համընկնում" />}
+        {level === 'GROUNDED_BUT_DATED' && <ConfidenceMeter score={topResult.similarity_score} tone="clay" label="ԱՐԼԻՍ-ի համընկնում" />}
+        {level === 'EXTERNAL_UNVERIFIED' && <GeneralKnowledgeBadge />}
+        <p className="generated-answer">{researchData.simplified_answer || 'AI մոդելը պատասխան չի վերադարձրել։ Կարող եք բացել ամենահամապատասխան պաշտոնական դրույթը։'}</p>
+        <div className="answer-sources">Հիմնված է {researchData.source_count} իրավական աղբյուրի վրա</div>
+        <button onClick={() => setStage(4)}>Տեսնել հիմնական աղբյուրը <Arrow /></button>
+      </>
+    }
+    if (researchData?.simplified_answer) return <><h3>Պատասխան՝ արտաքին աղբյուրից (չհաստատված)</h3><GeneralKnowledgeBadge /><p className="generated-answer">{researchData.simplified_answer}</p></>
+    return <><h3>Համապատասխան գործող դրույթ չի գտնվել</h3><p>Փորձեք վերաձևակերպել հարցը կամ ընտրել այլ ամսաթիվ։</p></>
+  }
   return (
     <main className="app-shell">
       <Sidebar />
@@ -217,7 +252,7 @@ function ResearchWorkspace({ initialQuestion, initialDate, onBack }) {
           </div>
         </section>
         <section className={`legal-result ${stage === 4 ? 'answer-open' : ''} ${loading ? 'is-loading' : ''}`} key={`${targetDate}-${stage}`}>
-          <Icon name="scales" /><div><span>{stage === 4 ? 'Պաշտոնական իրավական տեքստ' : 'Պարզեցված պատասխան'}</span>{loading ? <><h3>Պատրաստվում է աղբյուրներով հիմնավորված պատասխանը…</h3><p>Նախ զտվում և դասակարգվում են իրավական դրույթները, ապա պատասխանը կազմվում է միայն ընտրված աղբյուրներից։</p></> : error ? <><h3>Չհաջողվեց միանալ իրավական որոնման API-ին</h3><p>{error}</p></> : topResult ? stage === 4 ? <><h3>{topResult.act_title}{topResult.article_number ? ` · Հոդված ${topResult.article_number}` : ''}</h3><p>{topResult.text}</p><div className="live-meta"><span>{topResult.act_type || 'Իրավական ակտ'}</span><span>Ուժի մեջ՝ {topResult.valid_from}{topResult.valid_to ? ` — ${topResult.valid_to}` : ''}</span></div></> : <><h3>{researchData.simplified_answer ? 'Պատասխան՝ ըստ ընտրված ամսաթվի գործող աղբյուրների' : 'Պարզեցված պատասխանը հասանելի չէ'}</h3><p className="generated-answer">{researchData.simplified_answer || 'AI մոդելը պատասխան չի վերադարձրել։ Կարող եք բացել ամենահամապատասխան պաշտոնական դրույթը։'}</p><div className="answer-sources">Հիմնված է {researchData.source_count} իրավական աղբյուրի վրա</div><button onClick={() => setStage(4)}>Տեսնել հիմնական աղբյուրը <Arrow /></button></> : <><h3>Համապատասխան գործող դրույթ չի գտնվել</h3><p>Փորձեք վերաձևակերպել հարցը կամ ընտրել այլ ամսաթիվ։</p></>}</div>
+          <Icon name="scales" /><div><span>{stage === 4 ? 'Պաշտոնական իրավական տեքստ' : 'Պարզեցված պատասխան'}</span>{renderResultBody()}</div>
         </section>
         {researchData?.answer_error && !researchData?.simplified_answer && <p className="generation-error">{researchData.answer_error}</p>}
         {researchData?.warning && <p className="dataset-warning">{researchData.warning}</p>}
