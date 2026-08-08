@@ -29,17 +29,34 @@ def _result(similarity_score: float, text: str = "Հոդվածի տեքստ") ->
 
 class RollbackPipelineTests(unittest.TestCase):
     def test_non_temporal_confident_question_is_verified(self):
-        index = FakeIndex([_result(0.9)])
-        result = run_rollback("Ի՞նչ է աշխատանքային օրենսգիրքը", index, embedder=None)
+        index = FakeIndex([_result(
+            0.9, text="Աշխատանքային օրենսգիրքը սահմանում է աշխատանքային հարաբերությունները"
+        )])
+        with patch(
+            "backend.runtime.verification.confidence_checker.check_relevance",
+            return_value=True,
+        ):
+            result = run_rollback("Ի՞նչ է աշխատանքային օրենսգիրքը", index, embedder=None)
         self.assertIsInstance(result, RollbackAnswer)
         self.assertEqual(result.confidence_level, ConfidenceLevel.VERIFIED)
         self.assertEqual(result.source, "rag")
 
-    def test_non_temporal_low_confidence_is_no_answer_without_deepseek(self):
+    def test_non_temporal_low_confidence_falls_back_to_deepseek(self):
         index = FakeIndex([_result(0.2)])
-        with patch("backend.runtime.pipeline.ask_deepseek") as mock_ask:
+        with patch(
+            "backend.runtime.pipeline.ask_deepseek", return_value="External answer"
+        ) as mock_ask:
             result = run_rollback("Ինչ-որ անհասկանալի հարց", index, embedder=None)
-        mock_ask.assert_not_called()
+        mock_ask.assert_called_once()
+        self.assertEqual(result.confidence_level, ConfidenceLevel.EXTERNAL_UNVERIFIED)
+        self.assertEqual(result.source, "deepseek")
+        self.assertEqual(result.answer, "External answer")
+
+    def test_non_temporal_low_confidence_deepseek_failure_is_no_answer(self):
+        index = FakeIndex([_result(0.2)])
+        with patch("backend.runtime.pipeline.ask_deepseek", return_value=None) as mock_ask:
+            result = run_rollback("Ինչ-որ անհասկանալի հարց", index, embedder=None)
+        mock_ask.assert_called_once()
         self.assertEqual(result.confidence_level, ConfidenceLevel.NO_ANSWER)
         self.assertEqual(result.source, "none")
 
@@ -51,13 +68,19 @@ class RollbackPipelineTests(unittest.TestCase):
         self.assertEqual(result.input_type, "date_picker")
 
     def test_child_benefit_question_with_date_inside_corpus_window_is_grounded_but_dated(self):
-        index = FakeIndex([_result(0.9)])
-        result = run_rollback(
-            "Որքա՞ն է մանկական նպաստի չափը",
-            index,
-            embedder=None,
-            reference_date=date(2022, 1, 1),
-        )
+        index = FakeIndex([_result(
+            0.9, text="Մանկական նպաստի չափը սահմանվում է ամեն ամիս"
+        )])
+        with patch(
+            "backend.runtime.verification.confidence_checker.check_relevance",
+            return_value=True,
+        ):
+            result = run_rollback(
+                "Որքա՞ն է մանկական նպաստի չափը",
+                index,
+                embedder=None,
+                reference_date=date(2022, 1, 1),
+            )
         self.assertIsInstance(result, RollbackAnswer)
         self.assertEqual(result.confidence_level, ConfidenceLevel.GROUNDED_BUT_DATED)
         self.assertEqual(result.source, "rag")
@@ -93,6 +116,46 @@ class RollbackPipelineTests(unittest.TestCase):
             result = run_rollback("Ինչպիսի՞ն է օրենքը այսօր", index, embedder=None)
         self.assertEqual(result.confidence_level, ConfidenceLevel.NO_ANSWER)
         self.assertEqual(result.source, "none")
+
+    def test_high_similarity_irrelevant_match_is_not_falsely_verified(self):
+        # Real bug found live: a high-similarity RAG match that the LLM judges as
+        # not actually relevant must not be trusted as VERIFIED just because the
+        # score cleared the threshold and happened to share legal boilerplate words.
+        index = FakeIndex([_result(0.825, text="Unrelated but high-scoring article text")])
+        with patch(
+            "backend.runtime.verification.confidence_checker.check_relevance",
+            return_value=False,
+        ), patch("backend.runtime.pipeline.ask_deepseek", return_value=None):
+            result = run_rollback(
+                "Ես ստանում եմ 150.000 դրամ աշխատավարձ, արդյոք կարող եմ օգտվել "
+                "առողջապահական ապահովագրությունից",
+                index,
+                embedder=None,
+            )
+        self.assertNotEqual(result.confidence_level, ConfidenceLevel.VERIFIED)
+        self.assertEqual(result.confidence_level, ConfidenceLevel.NO_ANSWER)
+        self.assertEqual(result.source, "none")
+
+    def test_caller_supplied_date_does_not_force_temporal_on_a_plain_question(self):
+        # A UI that always collects a date up front (e.g. before knowing whether the
+        # question even needs one) must not corrupt routing: a non-temporal question
+        # with a supplied reference_date should still reach VERIFIED, not be
+        # incorrectly downgraded to GROUNDED_BUT_DATED just because a date was present.
+        index = FakeIndex([_result(
+            0.9, text="Աշխատանքային օրենսգիրքը սահմանում է աշխատանքային հարաբերությունները"
+        )])
+        with patch(
+            "backend.runtime.verification.confidence_checker.check_relevance",
+            return_value=True,
+        ):
+            result = run_rollback(
+                "Ի՞նչ է աշխատանքային օրենսգիրքը",
+                index,
+                embedder=None,
+                reference_date=date(2025, 1, 1),
+            )
+        self.assertEqual(result.confidence_level, ConfidenceLevel.VERIFIED)
+        self.assertEqual(result.source, "rag")
 
 
 if __name__ == "__main__":
