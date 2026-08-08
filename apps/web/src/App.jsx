@@ -148,14 +148,32 @@ function getVersion(date) {
   return versions.find(version => iso >= version.from && (!version.to || iso <= version.to)) || versions[versions.length - 1]
 }
 
+const armenianMonths = {
+  հունվար: 0, հունվարի: 0, փետրվար: 1, փետրվարի: 1, մարտ: 2, մարտի: 2,
+  ապրիլ: 3, ապրիլի: 3, մայիս: 4, մայիսի: 4, հունիս: 5, հունիսի: 5,
+  հուլիս: 6, հուլիսի: 6, օգոստոս: 7, օգոստոսի: 7, սեպտեմբեր: 8, սեպտեմբերի: 8,
+  հոկտեմբեր: 9, հոկտեմբերի: 9, նոյեմբեր: 10, նոյեմբերի: 10, դեկտեմբեր: 11, դեկտեմբերի: 11,
+}
+const armenianMonthPattern = Object.keys(armenianMonths).join('|')
+
+function validDate(year, month, day) {
+  const date = new Date(year, month, day)
+  return date.getFullYear() === year && date.getMonth() === month && date.getDate() === day ? date : null
+}
+
 function resolveQuestionDate(text) {
   const today = new Date()
   if (/այսօր/i.test(text)) return today
   if (/երեկ/i.test(text)) return new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
+  if (/վաղը/i.test(text)) return new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
   const iso = text.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/)
-  if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]))
+  if (iso) return validDate(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]))
   const numeric = text.match(/\b(\d{1,2})[./](\d{1,2})[./](\d{4})\b/)
-  if (numeric) return new Date(Number(numeric[3]), Number(numeric[2]) - 1, Number(numeric[1]))
+  if (numeric) return validDate(Number(numeric[3]), Number(numeric[2]) - 1, Number(numeric[1]))
+  const dayFirst = text.match(new RegExp(`(\\d{1,2})(?:-ին)?\\s+(${armenianMonthPattern})\\s+(\\d{4})(?:\\s*թ(?:վական(?:ի|ին)?)?\\.?)?`, 'i'))
+  if (dayFirst) return validDate(Number(dayFirst[3]), armenianMonths[dayFirst[2].toLowerCase()], Number(dayFirst[1]))
+  const yearFirst = text.match(new RegExp(`(\\d{4})\\s*թ(?:վական(?:ի|ին)?)?\\.?\\s+(${armenianMonthPattern})\\s+(\\d{1,2})(?:-ին)?`, 'i'))
+  if (yearFirst) return validDate(Number(yearFirst[1]), armenianMonths[yearFirst[2].toLowerCase()], Number(yearFirst[3]))
   return null
 }
 
@@ -176,7 +194,7 @@ function FrontPage({ onContinue }) {
       <section className="front-content">
         <div className="front-intro"><span>Հայաստանի իրավական օգնական</span><h1>Ի՞նչ իրավական հարց ունեք։</h1><p>Հարցրեք պարզ լեզվով։ Մենք կգտնենք հենց անհրաժեշտ ժամանակահատվածում գործող օրենսդրությունը։</p></div>
         <form className="front-question" onSubmit={submit}>
-          <textarea value={question} onChange={event => { setQuestion(event.target.value); if (needsDate) setNeedsDate(false) }} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) submit(event) }} rows="3" placeholder="Գրեք ձեր հարցը…" autoFocus />
+          <textarea value={question} onChange={event => { const value = event.target.value; setQuestion(value); const detected = resolveQuestionDate(value); if (detected) setSelectedDate(detected); if (needsDate) setNeedsDate(false) }} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) submit(event) }} rows="3" placeholder="Գրեք ձեր հարցը…" autoFocus />
           <div><span>Enter՝ շարունակելու համար</span><button aria-label="Շարունակել"><Arrow /></button></div>
         </form>
         {needsDate && <section className="front-calendar">
