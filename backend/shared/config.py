@@ -20,7 +20,11 @@ except ImportError:
 # The organizers provision DeepSeek access via an OpenRouter-gated key (not a native
 # DeepSeek API key) — see access-guide.md. Requests go to OpenRouter's chat-completions
 # endpoint with the "deepseek/..." model slug; OpenRouter proxies to DeepSeek from there.
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+DEEPSEEK_API_KEY = (
+    os.environ.get("DEEPSEEK_API_KEY")
+    or os.environ.get("OPENROUTER_API_KEY")
+    or os.environ.get("API_KEY", "")
+)
 DEEPSEEK_API_URL = os.environ.get(
     "DEEPSEEK_API_URL", "https://openrouter.ai/api/v1/chat/completions"
 )

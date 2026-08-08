@@ -9,6 +9,10 @@ from typing import Any
 
 ACTIVE_ARMENIAN = "Գործում է"
 LAW_TYPE = "Օրենք"
+TEMPORAL_ACT_TYPES = {
+    "Օրենք", "Օրենսգիրք", "Որոշում", "Հրաման", "Հրամանագիր",
+    "Կարգադրություն", "Համատեղ հրաման",
+}
 
 
 def is_recommended_record(record: dict[str, Any]) -> bool:
@@ -50,3 +54,24 @@ def select_recommended_act_ids(metadata_path: str | Path) -> set[str]:
             if current is None or _version_order(record) > _version_order(current):
                 selected[key] = record
     return {str(record["uniqid"]) for record in selected.values()}
+
+
+def select_temporal_act_ids(metadata_path: str | Path) -> set[str]:
+    """Select every dated Armenian legal version supported by temporal search."""
+    selected: set[str] = set()
+    with Path(metadata_path).open(encoding="utf-8") as stream:
+        for line_number, line in enumerate(stream, start=1):
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as error:
+                raise ValueError(f"Invalid metadata JSON on line {line_number}: {error}") from error
+            if (
+                record.get("language") == "AM"
+                and record.get("ActType") in TEMPORAL_ACT_TYPES
+                and record.get("EffectiveDate")
+                and record.get("uniqid") is not None
+            ):
+                selected.add(str(record["uniqid"]))
+    return selected

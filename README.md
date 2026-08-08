@@ -8,17 +8,67 @@ most relevant chunks for a natural-language question.
 The current project is a retrieval baseline. It retrieves source material but
 does not yet generate legal advice or a final synthesized answer.
 
+The repository also includes an interactive ARLIS AI frontend prototype. It
+demonstrates the intended landing page, structured-answer workspace, legal
+evidence panel, source highlighting, clarifying questions, and responsive
+mobile behavior using representative content. It is not yet connected to the
+Python retrieval pipeline.
+
+## Frontend prototype
+
+### Run the combined application
+
+Install dependencies once:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+cd apps\web
+npm.cmd install
+cd ..\..
+```
+
+Then start the retrieval API and frontend together from the project root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_live.ps1
+```
+
+Open `http://127.0.0.1:5173`. Keep the terminal open and press `Ctrl+C` to
+stop both services. The first launch may take about a minute while the index,
+model, and legacy validity metadata are loaded; later launches use a generated
+metadata cache.
+
+From the VS Code PowerShell terminal:
+
+```powershell
+cd apps/web
+npm.cmd install
+npm.cmd run dev
+```
+
+Open the local address printed by Vite, normally
+`http://localhost:5173`. Submit a suggested question to enter the legal
+research workspace. Hover or click cited answer text to highlight its
+supporting provision; on smaller screens, citations open the evidence drawer.
+
+Create a production build with:
+
+```powershell
+npm.cmd run build
+```
+
 ## Implemented pipeline
 
 ```text
 ARLIS JSONL.XZ dump
     -> streaming parser
-    -> active Armenian law/code selection
-    -> version deduplication
+    -> dated Armenian legislation selection
     -> article-aware chunks
     -> multilingual E5 embeddings
     -> local NumPy vector index
-    -> top-5 cosine-similarity results
+    -> target-date resolution
+    -> validity filtering
+    -> top-5 cosine-similarity results from valid versions only
 ```
 
 Each retrieval result contains:
@@ -27,7 +77,10 @@ Each retrieval result contains:
 {
   "text": "Relevant legal text...",
   "act_title": "ՀՀ ԱՇԽԱՏԱՆՔԱՅԻՆ ՕՐԵՆՍԳԻՐՔ",
+  "act_type": "Օրենսգիրք",
   "article_number": "113",
+  "valid_from": "2015-07-01",
+  "valid_to": null,
   "source_url": "https://pdf.arlis.am/...",
   "similarity_score": 0.82
 }
@@ -107,17 +160,19 @@ returns all exact matches.
 
 ## Build a vector index
 
-Build the recommended active-Armenian corpus:
+Build the temporal corpus. It includes dated Armenian laws, codes, government
+decisions, orders, decrees, and directives instead of only the latest active
+law/code snapshots:
 
 ```powershell
-python scripts/rebuild_index.py --corpus recommended
+python scripts/rebuild_index.py --corpus temporal
 ```
 
 Build a smaller development index:
 
 ```powershell
 python scripts/rebuild_index.py `
-  --corpus recommended `
+  --corpus temporal `
   --max-documents 100 `
   --output data/structured/vector_index_demo
 ```
@@ -143,6 +198,29 @@ data/structured/vector_index_demo
 ```
 
 ## Search
+
+Every search requires a target date. Date detection happens before retrieval;
+the vector ranker never sees a legal version that is invalid on that date.
+Provide a date directly in the question:
+
+```powershell
+python scripts/search_arlis.py `
+  "Ի՞նչ էր նախատեսում աշխատանքային օրենսգիրքը 12.05.2021-ին" `
+  --index data/structured/vector_index
+```
+
+Or pass it explicitly:
+
+```powershell
+python scripts/search_arlis.py `
+  "Որքա՞ն է փորձաշրջանի առավելագույն ժամկետը" `
+  --date 2021-05-12 `
+  --index data/structured/vector_index
+```
+
+When neither the question nor `--date` contains a complete date, the CLI asks
+for one before loading and searching the index. The web prototype opens a
+calendar at the same point in the flow.
 
 Search an existing full index:
 
@@ -209,6 +287,11 @@ The test suite covers:
 ## Important limitations
 
 - The source dump was last updated in April 2023.
+- The existing active-only vector index predates temporal metadata and must be
+  rebuilt with `--corpus temporal` before date-aware search can return results.
+- `EffectiveDate` and `InterruptDate` determine whether an act is valid on the
+  target date. Exact historical article wording is only available when that
+  historical version exists as a separate record in the source dump.
 - The source contains duplicate snapshots and reused act numbers.
 - Version selection currently uses a deterministic metadata identity and keeps
   the highest numeric ARLIS identifier.

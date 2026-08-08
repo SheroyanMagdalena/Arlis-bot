@@ -53,7 +53,14 @@ def run_rollback(
     top_k: int = 5,
 ) -> RollbackAnswer | ClarificationRequest:
     explicit = classify_temporal(question)
-    results = index.search(question, embedder, top_k=top_k)
+    # The temporal index requires a concrete date for eligibility filtering.
+    # Use the UI-supplied reference date when available; today's law is the
+    # neutral retrieval context while deciding whether a missing date needs
+    # clarification.
+    retrieval_date = reference_date or date.today()
+    results = index.search(
+        question, embedder, top_k=top_k, target_date=retrieval_date
+    )
 
     # Whether the QUESTION is temporal is a property of the question and the
     # matched content alone -- it must not depend on whether a caller happens to

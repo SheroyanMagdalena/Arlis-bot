@@ -3,4 +3,8 @@ __pycache__/
 *.py[cod]
 data/structured/vector_index*/
 data/raw/*
+node_modules/
+dist/
 .env
+.env.*
+!.env.example

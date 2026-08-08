@@ -55,12 +55,18 @@ def chunk_document(
 
     chunk_index = 0
     for article_number, section in sections:
+        article_heading = section.splitlines()[0].strip() if article_number else ""
         for part in _split_long_text(section, max_chars, overlap_chars):
             yield {
                 "chunk_id": f"{document['act_id']}:{chunk_index}",
                 "act_id": document["act_id"],
                 "act_title": document.get("title") or "",
+                "act_type": document.get("act_type") or "",
                 "article_number": article_number,
+                "article_heading": article_heading,
+                "valid_from": document.get("effective_date"),
+                "valid_to": document.get("interruption_date"),
+                "status": document.get("status"),
                 "source_url": document.get("source_url"),
                 "text": part,
             }

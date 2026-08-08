@@ -163,7 +163,7 @@ function validDate(year, month, day) {
 
 function resolveQuestionDate(text) {
   const today = new Date()
-  if (/այսօր/i.test(text)) return today
+  if (/այսօր|հիմա|ներկայումս|ներկա պահին|այս պահին/i.test(text)) return today
   if (/երեկ/i.test(text)) return new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
   if (/վաղը/i.test(text)) return new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
   const iso = text.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/)
@@ -174,6 +174,12 @@ function resolveQuestionDate(text) {
   if (dayFirst) return validDate(Number(dayFirst[3]), armenianMonths[dayFirst[2].toLowerCase()], Number(dayFirst[1]))
   const yearFirst = text.match(new RegExp(`(\\d{4})\\s*թ(?:վական(?:ի|ին)?)?\\.?\\s+(${armenianMonthPattern})\\s+(\\d{1,2})(?:-ին)?`, 'i'))
   if (yearFirst) return validDate(Number(yearFirst[1]), armenianMonths[yearFirst[2].toLowerCase()], Number(yearFirst[3]))
+  const yearMonth = text.match(new RegExp(`(\\d{4})\\s*թ(?:վական(?:ի|ին)?)?\\.?\\s+(${armenianMonthPattern})(?:ին)?`, 'i'))
+  if (yearMonth) return validDate(Number(yearMonth[1]), armenianMonths[yearMonth[2].toLowerCase()], 1)
+  const monthYear = text.match(new RegExp(`(${armenianMonthPattern})(?:ին)?\\s+(\\d{4})(?:\\s*թ(?:վական(?:ի|ին)?)?\\.?)?`, 'i'))
+  if (monthYear) return validDate(Number(monthYear[2]), armenianMonths[monthYear[1].toLowerCase()], 1)
+  const numericMonth = text.match(/\b(\d{1,2})[./](\d{4})\b/)
+  if (numericMonth) return validDate(Number(numericMonth[2]), Number(numericMonth[1]) - 1, 1)
   return null
 }
 
@@ -216,8 +222,38 @@ function ResearchWorkspace({ initialQuestion, initialDate, onBack }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedSourceIndex, setSelectedSourceIndex] = useState(0)
-  const chooseDate = (date) => { setSelectedDate(date); setStage(3) }
-  const submit = (event) => { event.preventDefault(); if (!draft.trim()) return; setQuestion(draft.trim()); setDraft(''); setStage(2) }
+  const [pendingQuestion, setPendingQuestion] = useState('')
+  const [datePrompt, setDatePrompt] = useState('')
+  const chooseDate = (date) => {
+    setSelectedDate(date)
+    if (pendingQuestion) {
+      setQuestion(pendingQuestion)
+      setDraft('')
+      setPendingQuestion('')
+      setDatePrompt('')
+      setStage(2)
+    } else {
+      setStage(3)
+    }
+  }
+  const submit = (event) => {
+    event.preventDefault()
+    const nextQuestion = draft.trim()
+    if (!nextQuestion) return
+    const detectedDate = resolveQuestionDate(nextQuestion)
+    if (!detectedDate) {
+      setPendingQuestion(nextQuestion)
+      setDatePrompt('Հարցում ամսաթիվ նշված չէ։ Խնդրում ենք օրացույցից ընտրել ամսաթիվը։')
+      requestAnimationFrame(() => document.querySelector('.temporal-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+      return
+    }
+    setSelectedDate(detectedDate)
+    setQuestion(nextQuestion)
+    setDraft('')
+    setPendingQuestion('')
+    setDatePrompt('')
+    setStage(2)
+  }
   const targetDate = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
   useEffect(() => {
     const controller = new AbortController()
@@ -256,7 +292,8 @@ function ResearchWorkspace({ initialQuestion, initialDate, onBack }) {
         </section>
         {researchData?.answer_error && !researchData?.simplified_answer && <p className="generation-error">{researchData.answer_error}</p>}
         {researchData?.warning && <p className="dataset-warning">{researchData.warning}</p>}
-        <form className="question-input" onSubmit={submit}><input value={draft} onChange={e => setDraft(e.target.value)} placeholder="Գրեք ձեր հարցը…" /><button aria-label="Ուղարկել"><Icon name="send" /></button></form>
+        {datePrompt && <p className="followup-date-prompt"><Icon name="check" />{datePrompt}</p>}
+        <form className={`question-input ${datePrompt ? 'needs-date' : ''}`} onSubmit={submit}><input value={draft} onChange={e => { setDraft(e.target.value); if (datePrompt) { setDatePrompt(''); setPendingQuestion('') } }} placeholder="Գրեք ձեր հարցը…" /><button aria-label="Ուղարկել"><Icon name="send" /></button></form>
       </section>
       <Timeline results={researchData?.results || []} selectedIndex={selectedSourceIndex} loading={loading} onSelect={index => { setSelectedSourceIndex(index); setStage(4) }} />
     </main>

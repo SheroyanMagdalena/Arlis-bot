@@ -9,16 +9,21 @@ class ArlisParserTests(unittest.TestCase):
         parsed = parse_record({
             "uniqid": "12345",
             "title": "ՀՀ աշխատանքային օրենսգիրք",
+            "ActType": "Օրենսգիրք",
             "ActStatus": "Գործում է",
             "EffectiveDate": "21.06.2005",
+            "EnactmentDate": "09.11.2004",
             "pdf_link": "https://pdf.arlis.am/12345",
             "body": "<div><p>Առաջին հոդված</p><p>Երկրորդ հոդված</p></div>",
         })
         self.assertEqual(parsed, {
             "act_id": "12345",
             "title": "ՀՀ աշխատանքային օրենսգիրք",
+            "act_type": "Օրենսգիրք",
             "status": "active",
             "effective_date": "2005-06-21",
+            "interruption_date": None,
+            "enactment_date": "2004-11-09",
             "source_url": "https://pdf.arlis.am/12345",
             "text": "Առաջին հոդված\nԵրկրորդ հոդված",
         })
@@ -30,7 +35,7 @@ class ArlisParserTests(unittest.TestCase):
         records = list(iter_records(dump, limit=3))
         self.assertEqual(len(records), 3)
         for record in records:
-            self.assertEqual(set(record), {"act_id", "title", "status", "effective_date", "source_url", "text"})
+            self.assertEqual(set(record), {"act_id", "title", "act_type", "status", "effective_date", "interruption_date", "enactment_date", "source_url", "text"})
             self.assertTrue(record["act_id"])
             self.assertTrue(record["title"])
             self.assertTrue(record["text"])

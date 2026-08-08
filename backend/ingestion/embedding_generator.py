@@ -32,6 +32,21 @@ class LocalEmbedder:
     def embed_query(self, query: str) -> np.ndarray:
         return self._encode([f"query: {query}"], 1)[0]
 
+    @property
+    def dimension(self) -> int:
+        getter = getattr(self.model, "get_embedding_dimension", self.model.get_sentence_embedding_dimension)
+        return int(getter())
+
+    def configuration(self) -> dict[str, Any]:
+        return {
+            "model_name": self.model_name,
+            "dimension": self.dimension,
+            "normalize_embeddings": True,
+            "query_prefix": "query: ",
+            "passage_prefix": "passage: ",
+            "pooling": str(self.model[1]) if len(self.model) > 1 else "model-defined",
+        }
+
     def _encode(self, texts: Sequence[str], batch_size: int) -> np.ndarray:
         vectors = self.model.encode(
             list(texts),

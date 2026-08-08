@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import lzma
 import re
+import unicodedata
 from datetime import datetime
 from html.parser import HTMLParser
 from pathlib import Path
@@ -46,6 +47,7 @@ def html_to_text(value: str | None) -> str:
     """Convert an ARLIS HTML body into normalized readable text."""
     if not value:
         return ""
+    value = unicodedata.normalize("NFKC", value)
     parser = _TextExtractor()
     parser.feed(value)
     parser.close()
@@ -89,8 +91,11 @@ def parse_record(record: Mapping[str, Any]) -> dict[str, str | None]:
     return {
         "act_id": str(act_id).strip(),
         "title": str(record.get("title") or "").strip(),
+        "act_type": str(record.get("ActType", record.get("act_type")) or "").strip(),
         "status": normalize_status(record.get("ActStatus", record.get("status"))),
         "effective_date": normalize_date(record.get("EffectiveDate", record.get("effective_date"))),
+        "interruption_date": normalize_date(record.get("InterruptDate", record.get("interruption_date"))),
+        "enactment_date": normalize_date(record.get("EnactmentDate", record.get("enactment_date"))),
         "source_url": str(source_url).strip() if source_url else None,
         "text": html_to_text(str(body)) if body else "",
     }

@@ -13,7 +13,7 @@ class FakeIndex:
     def __init__(self, results: list[RetrievalResult]) -> None:
         self._results = results
 
-    def search(self, query, embedder, *, top_k=5):
+    def search(self, query, embedder, *, top_k=5, target_date=None):
         return self._results
 
 

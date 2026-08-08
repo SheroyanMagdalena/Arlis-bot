@@ -13,7 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from backend.ingestion.article_chunker import chunk_document
 from backend.ingestion.embedding_generator import DEFAULT_MODEL, LocalEmbedder
 from backend.ingestion.parser import iter_records
-from backend.ingestion.version_resolver import select_recommended_act_ids
+from backend.ingestion.version_resolver import select_recommended_act_ids, select_temporal_act_ids
 from backend.runtime.retrieval.vector_search import LocalVectorIndex
 
 
@@ -26,21 +26,22 @@ def main() -> int:
     parser.add_argument("--max-documents", type=int, default=0, help="Optional development limit")
     parser.add_argument(
         "--corpus",
-        choices=("recommended", "all"),
-        default="recommended",
-        help="Recommended selects deduplicated active Armenian laws and codes",
+        choices=("temporal", "recommended", "all"),
+        default="temporal",
+        help="Temporal keeps dated versions of Armenian laws, codes, decisions, and orders",
     )
     parser.add_argument("--batch-size", type=int, default=32)
     args = parser.parse_args()
 
     limit = args.max_documents or None
-    act_ids = (
-        select_recommended_act_ids(args.metadata)
-        if args.corpus == "recommended"
-        else None
-    )
+    if args.corpus == "temporal":
+        act_ids = select_temporal_act_ids(args.metadata)
+    elif args.corpus == "recommended":
+        act_ids = select_recommended_act_ids(args.metadata)
+    else:
+        act_ids = None
     if act_ids is not None:
-        print(f"Selected {len(act_ids)} deduplicated active Armenian laws/codes")
+        print(f"Selected {len(act_ids)} documents for the {args.corpus} corpus")
     chunks = [
         chunk
         for document in iter_records(args.dump, limit=limit, act_ids=act_ids)

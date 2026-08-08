@@ -24,12 +24,7 @@ DISCLAIMERS: dict[ConfidenceLevel, str] = {
         "law changed after that date, this may be outdated — verify against the "
         "official source."
     ),
-    ConfidenceLevel.EXTERNAL_UNVERIFIED: (
-        "We are not 100% sure — the ARLIS legal database did not return a "
-        "high-confidence match, so this answer combines any relevant excerpts we "
-        "found with general external knowledge. Please confirm independently "
-        "before relying on it."
-    ),
+    ConfidenceLevel.EXTERNAL_UNVERIFIED: "",
     ConfidenceLevel.NO_ANSWER: (
         "We could not find a reliable answer. Please rephrase your question or "
         "consult an official ARLIS source directly."
