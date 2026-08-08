@@ -104,22 +104,38 @@ function Calendar({ selected, onSelect }) {
   )
 }
 
-function Timeline({ activeVersion }) {
+function Timeline({ results = [], selectedIndex = 0, onSelect, loading }) {
+  const selected = results[selectedIndex] || results[0]
+  const excerpt = text => {
+    const clean = String(text || '').replace(/\s+/g, ' ').trim()
+    return clean.length > 190 ? `${clean.slice(0, 190)}…` : clean
+  }
   return (
     <aside className="timeline-panel">
       <div className="chronos-art" aria-hidden="true"><img src="/chronos.png" alt="" /></div>
-      <header><div className="overline">Օրենսդրության փոփոխություններ</div><h2>ՀՀ աշխատանքային<br />օրենսգիրք</h2><p>Հոդված 113</p></header>
-      <div className="timeline" style={{ '--active-index': versions.findIndex(v => v.id === activeVersion.id) }}>
+      <header>
+        <div className="overline">Համապատասխան իրավական աղբյուրներ</div>
+        <h2>{selected?.act_title || (loading ? 'Աղբյուրները որոնվում են…' : 'Իրավական աղբյուրներ')}</h2>
+        <p>{selected?.article_number ? `Հոդված ${selected.article_number}` : results.length ? `${results.length} աղբյուր` : 'Արդյունքներ չկան'}</p>
+      </header>
+      <div className="timeline source-timeline" style={{ '--active-index': Math.max(selectedIndex, 0), '--source-count': Math.max(results.length, 1) }}>
         <div className="timeline-track"><span /></div>
-        {versions.map(version => (
-          <article key={version.id} className={`version ${version.tone} ${version.id === activeVersion.id ? 'selected' : ''}`}>
+        {results.map((result, index) => (
+          <article
+            key={`${result.source_url}-${result.article_number}-${index}`}
+            className={`version ${index === 0 ? 'olive' : index === 1 ? 'clay' : 'gray'} ${index === selectedIndex ? 'selected' : ''}`}
+            onClick={() => onSelect(index)} role="button" tabIndex="0"
+            onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') onSelect(index) }}
+          >
             <i className="node" />
-            <div className="version-status">{version.status}{version.id === activeVersion.id && <span>Ընտրված ամսաթիվ</span>}</div>
-            <time>{version.range}</time><p>{version.description}</p><a href="https://www.arlis.am/" target="_blank" rel="noreferrer">Տեսնել ARLIS-ում ↗</a>
+            <div className="version-status">{result.act_type || 'Իրավական ակտ'}{index === selectedIndex && <span>Ընտրված աղբյուր</span>}</div>
+            <time>{result.article_number ? `Հոդված ${result.article_number}` : 'Ընդհանուր դրույթ'} · {result.valid_from}{result.valid_to ? ` — ${result.valid_to}` : ' — գործող'}</time>
+            <h3>{result.act_title}</h3><p>{excerpt(result.text)}</p>
+            {result.source_url && <a href={result.source_url} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()}>Տեսնել ARLIS-ում ↗</a>}
           </article>
         ))}
       </div>
-      <button className="all-changes">Տեսնել բոլոր փոփոխությունները <span>↓</span></button>
+      {!!results.length && <div className="source-count">Պատասխանը հիմնված է {results.length} իրավական աղբյուրի վրա</div>}
     </aside>
   )
 }
@@ -182,13 +198,13 @@ function ResearchWorkspace({ initialQuestion, initialDate, onBack }) {
   const [researchData, setResearchData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const activeVersion = useMemo(() => getVersion(selectedDate), [selectedDate])
+  const [selectedSourceIndex, setSelectedSourceIndex] = useState(0)
   const chooseDate = (date) => { setSelectedDate(date); setStage(3) }
   const submit = (event) => { event.preventDefault(); if (!draft.trim()) return; setQuestion(draft.trim()); setDraft(''); setStage(2) }
   const targetDate = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
   useEffect(() => {
     const controller = new AbortController()
-    setLoading(true); setError(''); setResearchData(null)
+    setLoading(true); setError(''); setResearchData(null); setSelectedSourceIndex(0)
     fetch('/api/research', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
       body: JSON.stringify({ question, target_date: targetDate, top_k: 5 }),
@@ -200,7 +216,7 @@ function ResearchWorkspace({ initialQuestion, initialDate, onBack }) {
     }).finally(() => setLoading(false))
     return () => controller.abort()
   }, [question, targetDate])
-  const topResult = researchData?.results?.[0]
+  const topResult = researchData?.results?.[selectedSourceIndex] || researchData?.results?.[0]
   return (
     <main className="app-shell">
       <Sidebar onHome={onBack} />
@@ -223,7 +239,7 @@ function ResearchWorkspace({ initialQuestion, initialDate, onBack }) {
         {researchData?.warning && <p className="dataset-warning">{researchData.warning}</p>}
         <form className="question-input" onSubmit={submit}><input value={draft} onChange={e => setDraft(e.target.value)} placeholder="Գրեք ձեր հարցը…" /><button aria-label="Ուղարկել"><Icon name="send" /></button></form>
       </section>
-      <Timeline activeVersion={activeVersion} />
+      <Timeline results={researchData?.results || []} selectedIndex={selectedSourceIndex} loading={loading} onSelect={index => { setSelectedSourceIndex(index); setStage(4) }} />
     </main>
   )
 }
