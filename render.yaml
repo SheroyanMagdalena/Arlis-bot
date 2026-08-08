@@ -4,8 +4,8 @@ services:
     runtime: python
     plan: free
     branch: demo
-    buildCommand: pip install -r requirements.txt && python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')"
-    startCommand: python -m backend.main --index data/structured/render_index
+    buildCommand: pip install -r requirements-render.txt
+    startCommand: python -m backend.main --index data/structured/render_index --lexical-only
     healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION

@@ -15,6 +15,8 @@ from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import numpy as np
+
 from backend.ingestion.embedding_generator import DEFAULT_MODEL, LocalEmbedder
 from backend.runtime.clarification.schemas import ClarificationRequest
 from backend.runtime.pipeline import run_rollback
@@ -23,6 +25,26 @@ from backend.runtime.retrieval.vector_search import LocalVectorIndex
 
 INDEX: LocalVectorIndex
 EMBEDDER: LocalEmbedder
+
+
+class LexicalRuntimeEmbedder:
+    """Tiny query-vector shim for memory-constrained demo deployments.
+
+    BM25 carries the retrieval signal; the non-zero vector merely preserves the
+    hybrid index interface without importing PyTorch or loading a transformer.
+    """
+
+    def __init__(self, index: LocalVectorIndex) -> None:
+        self._configuration = dict((index.manifest or {}).get("embedding", {}))
+        self.dimension = int(self._configuration.get("dimension") or index.embeddings.shape[1])
+
+    def configuration(self) -> dict:
+        return self._configuration
+
+    def embed_query(self, query: str) -> np.ndarray:
+        vector = np.zeros(self.dimension, dtype=np.float32)
+        vector[0] = 1.0
+        return vector
 
 
 def _result_to_frontend_shape(result_dict: dict) -> dict:
@@ -145,13 +167,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--index", type=Path, default=Path("data/structured/vector_index_demo"))
     parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--lexical-only", action="store_true")
     parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8000")))
     args = parser.parse_args()
 
     print(f"Loading index from {args.index} ...")
     INDEX = LocalVectorIndex.load(args.index)
-    print("Loading embedding model ...")
-    EMBEDDER = LocalEmbedder(args.model)
+    if args.lexical_only:
+        print("Using memory-efficient lexical retrieval ...")
+        EMBEDDER = LexicalRuntimeEmbedder(INDEX)
+    else:
+        print("Loading embedding model ...")
+        EMBEDDER = LocalEmbedder(args.model)
     print(f"Ready. POST /api/research on 0.0.0.0:{args.port}")
 
     server = ThreadingHTTPServer(("0.0.0.0", args.port), Handler)
