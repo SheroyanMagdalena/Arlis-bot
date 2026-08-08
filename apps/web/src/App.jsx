@@ -45,8 +45,8 @@ const versions = [
 ]
 
 const navItems = [
-  ['questions', 'Հարցեր'], ['sources', 'Իրավական աղբյուրներ'], ['cases', 'Իմ գործերը'],
-  ['saved', 'Պահվածները'], ['news', 'Նորություններ'], ['settings', 'Կարգավորումներ'],
+  ['questions', 'Հարցեր'], ['cases', 'Իմ գործերը'],
+  ['saved', 'Պահվածները'], ['settings', 'Կարգավորումներ'],
 ]
 
 function Logo({ onClick }) {
@@ -67,7 +67,6 @@ function Sidebar({ onHome }) {
       <button className="new-question"><Icon name="plus" />Նոր հարց</button>
       <nav>{navItems.map(([icon, label], index) => <button className={index === 0 ? 'active' : ''} key={label}><Icon name={icon} />{label}</button>)}</nav>
       <JusticeArtwork />
-      <div className="profile"><span>ԱՄ</span><div><b>Անի Մարտիրոսյան</b><small>Անձնական հաշիվ</small></div><Icon name="chevron" /></div>
     </aside>
   )
 }
@@ -233,7 +232,7 @@ function ResearchWorkspace({ initialQuestion, initialDate, onBack }) {
           </div>
         </section>
         <section className={`legal-result ${stage === 4 ? 'answer-open' : ''} ${loading ? 'is-loading' : ''}`} key={`${targetDate}-${stage}`}>
-          <Icon name="scales" /><div><span>{stage === 4 ? 'Պաշտոնական իրավական տեքստ' : 'Պարզեցված պատասխան'}</span>{loading ? <><h3>Պատրաստվում է աղբյուրներով հիմնավորված պատասխանը…</h3><p>Նախ զտվում և դասակարգվում են իրավական դրույթները, ապա պատասխանը կազմվում է միայն ընտրված աղբյուրներից։</p></> : error ? <><h3>Չհաջողվեց միանալ իրավական որոնման API-ին</h3><p>{error}</p></> : topResult ? stage === 4 ? <><h3>{topResult.act_title}{topResult.article_number ? ` · Հոդված ${topResult.article_number}` : ''}</h3><p>{topResult.text}</p><div className="live-meta"><span>{topResult.act_type || 'Իրավական ակտ'}</span><span>Ուժի մեջ՝ {topResult.valid_from}{topResult.valid_to ? ` — ${topResult.valid_to}` : ''}</span></div></> : <><h3>{researchData.simplified_answer ? 'Պատասխան՝ ըստ ընտրված ամսաթվի գործող աղբյուրների' : 'Պարզեցված պատասխանը հասանելի չէ'}</h3><p className="generated-answer">{researchData.simplified_answer || 'AI մոդելը պատասխան չի վերադարձրել։ Կարող եք բացել ամենահամապատասխան պաշտոնական դրույթը։'}</p><div className="answer-sources">Հիմնված է {researchData.source_count} իրավական աղբյուրի վրա</div><button onClick={() => setStage(4)}>Տեսնել հիմնական աղբյուրը <Arrow /></button></> : <><h3>Համապատասխան գործող դրույթ չի գտնվել</h3><p>Փորձեք վերաձևակերպել հարցը կամ ընտրել այլ ամսաթիվ։</p></>}</div>
+          <Icon name="scales" /><div><span>{stage === 4 ? 'Պաշտոնական իրավական տեքստ' : 'Պարզեցված պատասխան'}</span>{loading ? <><h3>Պատրաստվում է աղբյուրներով հիմնավորված պատասխանը…</h3><p>Նախ զտվում և դասակարգվում են իրավական դրույթները, ապա պատասխանը կազմվում է միայն ընտրված աղբյուրներից։</p></> : error ? <><h3>Չհաջողվեց միանալ իրավական որոնման API-ին</h3><p>{error}</p></> : topResult ? stage === 4 ? <><button className="result-back" onClick={() => setStage(3)}><Arrow left /> Վերադառնալ պատասխանին</button><h3>{topResult.act_title}{topResult.article_number ? ` · Հոդված ${topResult.article_number}` : ''}</h3><p>{topResult.text}</p><div className="live-meta"><span>{topResult.act_type || 'Իրավական ակտ'}</span><span>Ուժի մեջ՝ {topResult.valid_from}{topResult.valid_to ? ` — ${topResult.valid_to}` : ''}</span></div></> : <><h3>{researchData.simplified_answer ? 'Պատասխան՝ ըստ ընտրված ամսաթվի գործող աղբյուրների' : 'Պարզեցված պատասխանը հասանելի չէ'}</h3><p className="generated-answer">{researchData.simplified_answer || 'AI մոդելը պատասխան չի վերադարձրել։ Կարող եք բացել ամենահամապատասխան պաշտոնական դրույթը։'}</p><div className="answer-sources">Հիմնված է {researchData.source_count} իրավական աղբյուրի վրա</div><button onClick={() => setStage(4)}>Տեսնել հիմնական աղբյուրը <Arrow /></button></> : <><h3>Համապատասխան գործող դրույթ չի գտնվել</h3><p>Փորձեք վերաձևակերպել հարցը կամ ընտրել այլ ամսաթիվ։</p></>}</div>
         </section>
         {researchData?.answer_error && !researchData?.simplified_answer && <p className="generation-error">{researchData.answer_error}</p>}
         {researchData?.warning && <p className="dataset-warning">{researchData.warning}</p>}
