@@ -64,7 +64,7 @@ function Sidebar({ onHome }) {
   return (
     <aside className="sidebar">
       <Logo onClick={onHome} />
-      <button className="new-question"><Icon name="plus" />Նոր հարց</button>
+      <button className="new-question" onClick={onHome}><Icon name="plus" />Նոր հարց</button>
       <nav>{navItems.map(([icon, label], index) => <button className={index === 0 ? 'active' : ''} key={label}><Icon name={icon} />{label}</button>)}</nav>
       <JusticeArtwork />
     </aside>
@@ -214,45 +214,16 @@ function FrontPage({ onContinue }) {
 }
 
 function ResearchWorkspace({ initialQuestion, initialDate, onBack }) {
-  const [question, setQuestion] = useState(initialQuestion)
-  const [draft, setDraft] = useState('')
+  const question = initialQuestion
   const [selectedDate, setSelectedDate] = useState(initialDate)
   const [stage, setStage] = useState(3)
   const [researchData, setResearchData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedSourceIndex, setSelectedSourceIndex] = useState(0)
-  const [pendingQuestion, setPendingQuestion] = useState('')
-  const [datePrompt, setDatePrompt] = useState('')
   const chooseDate = (date) => {
     setSelectedDate(date)
-    if (pendingQuestion) {
-      setQuestion(pendingQuestion)
-      setDraft('')
-      setPendingQuestion('')
-      setDatePrompt('')
-      setStage(2)
-    } else {
-      setStage(3)
-    }
-  }
-  const submit = (event) => {
-    event.preventDefault()
-    const nextQuestion = draft.trim()
-    if (!nextQuestion) return
-    const detectedDate = resolveQuestionDate(nextQuestion)
-    if (!detectedDate) {
-      setPendingQuestion(nextQuestion)
-      setDatePrompt('Հարցում ամսաթիվ նշված չէ։ Խնդրում ենք օրացույցից ընտրել ամսաթիվը։')
-      requestAnimationFrame(() => document.querySelector('.temporal-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
-      return
-    }
-    setSelectedDate(detectedDate)
-    setQuestion(nextQuestion)
-    setDraft('')
-    setPendingQuestion('')
-    setDatePrompt('')
-    setStage(2)
+    setStage(3)
   }
   const targetDate = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
   useEffect(() => {
@@ -292,8 +263,6 @@ function ResearchWorkspace({ initialQuestion, initialDate, onBack }) {
         </section>
         {researchData?.answer_error && !researchData?.simplified_answer && <p className="generation-error">{researchData.answer_error}</p>}
         {researchData?.warning && <p className="dataset-warning">{researchData.warning}</p>}
-        {datePrompt && <p className="followup-date-prompt"><Icon name="check" />{datePrompt}</p>}
-        <form className={`question-input ${datePrompt ? 'needs-date' : ''}`} onSubmit={submit}><input value={draft} onChange={e => { setDraft(e.target.value); if (datePrompt) { setDatePrompt(''); setPendingQuestion('') } }} placeholder="Գրեք ձեր հարցը…" /><button aria-label="Ուղարկել"><Icon name="send" /></button></form>
       </section>
       <Timeline results={researchData?.results || []} selectedIndex={selectedSourceIndex} loading={loading} onSelect={index => { setSelectedSourceIndex(index); setStage(4) }} />
     </main>
