@@ -12,7 +12,7 @@ import argparse
 import json
 import os
 from datetime import date
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import numpy as np
@@ -160,7 +160,12 @@ class Handler(BaseHTTPRequestHandler):
             if origin.strip()
         }
         origin = self.headers.get("Origin")
-        if origin in allowed_origins:
+        is_vercel_deployment = bool(
+            origin
+            and origin.startswith("https://")
+            and origin.endswith(".vercel.app")
+        )
+        if origin in allowed_origins or is_vercel_deployment:
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
 
@@ -184,7 +189,10 @@ def main() -> int:
         EMBEDDER = LocalEmbedder(args.model)
     print(f"Ready. POST /api/research on 0.0.0.0:{args.port}")
 
-    server = ThreadingHTTPServer(("0.0.0.0", args.port), Handler)
+    # SentenceTransformer/PyTorch can terminate the process when multiple request
+    # threads encode concurrently on Windows. Searches are intentionally serialized;
+    # the frontend also queues multi-year requests one at a time.
+    server = HTTPServer(("0.0.0.0", args.port), Handler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

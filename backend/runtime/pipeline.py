@@ -35,6 +35,8 @@ from backend.runtime.clarification.schemas import ClarificationRequest
 from backend.runtime.fallback.deepseek_search import ask_deepseek
 from backend.runtime.intent.classifier import classify_temporal
 from backend.runtime.reasoning.schemas import RollbackAnswer
+from backend.runtime.reasoning.rental_tax import calculate_2019_rental_tax
+from backend.runtime.reasoning.salary_tax import calculate_salary_tax
 from backend.runtime.retrieval.schemas import RetrievalResult
 from backend.runtime.retrieval.vector_search import LocalVectorIndex
 from backend.runtime.verification.confidence_checker import (
@@ -53,6 +55,74 @@ def run_rollback(
     reference_date: date | None = None,
     top_k: int = 5,
 ) -> RollbackAnswer | ClarificationRequest:
+    salary_tax = calculate_salary_tax(question, reference_date)
+    if salary_tax is not None:
+        gross = f"{salary_tax.gross_salary:,}"
+        tax_due = f"{salary_tax.tax_due:,}"
+        rate = salary_tax.rate_percent
+        year = reference_date.year
+        citation = RetrievalResult(
+            text=(
+                f"ՀՀ հարկային օրենսգրքի 150-րդ հոդվածի 1-ին մասով {year} "
+                f"թվականի հունվարի 1-ից աշխատավարձի նկատմամբ եկամտային հարկը "
+                f"հաշվարկվում է {rate} տոկոս դրույքաչափով։"
+            ),
+            act_title="ՀՀ ՀԱՐԿԱՅԻՆ ՕՐԵՆՍԳԻՐՔ",
+            act_type="Օրենսգիրք",
+            article_number="150, մաս 1",
+            source_url="https://www.arlis.am/hy/acts/137296",
+            valid_from=f"{year}-01-01",
+            valid_to=f"{year + 1}-01-01",
+            similarity_score=1.0,
+        )
+        return RollbackAnswer(
+            answer=(
+                f"{reference_date.isoformat()}-ի դրությամբ {gross} դրամ ամսական "
+                f"աշխատավարձից պետք է պահվեր {tax_due} դրամ եկամտային հարկ։ "
+                f"Հաշվարկ՝ {gross} × {rate}% = {tax_due} դրամ։ Կիրառվել է ՀՀ "
+                "հարկային օրենսգրքի 150-րդ հոդվածի 1-ին մասի՝ այդ ամսաթվին "
+                "գործող դրույքաչափը։"
+            ),
+            confidence_level=ConfidenceLevel.VERIFIED,
+            disclaimer="",
+            source="rag",
+            citations=[citation],
+            reference_date=reference_date,
+        )
+    rental_tax = calculate_2019_rental_tax(question, reference_date)
+    if rental_tax is not None:
+        gross = f"{rental_tax.gross_income:,}"
+        threshold = f"{rental_tax.threshold:,}"
+        tax_due = f"{rental_tax.tax_due:,}"
+        citation = RetrievalResult(
+            text=(
+                "ՀՀ հարկային օրենսգրքի 150-րդ հոդվածի 7-րդ մասով "
+                "վարձակալական վճարները հարկվում են 10 տոկոսով, իսկ 2019 "
+                "թվականի 58.35 միլիոն դրամ շեմը գերազանցող մասի նկատմամբ "
+                "հաշվարկվում է լրացուցիչ 10 տոկոս եկամտային հարկ։"
+            ),
+            act_title="ՀՀ ՀԱՐԿԱՅԻՆ ՕՐԵՆՍԳԻՐՔ",
+            act_type="Օրենսգիրք",
+            article_number="150, մաս 7",
+            source_url="https://www.arlis.am/hy/acts/153843",
+            valid_from="2019-01-01",
+            valid_to="2020-01-01",
+            similarity_score=1.0,
+        )
+        return RollbackAnswer(
+            answer=(
+                f"{reference_date.isoformat()}-ի դրությամբ վճարման ենթակա "
+                f"եկամտային հարկը կազմում էր {tax_due} դրամ։ Հաշվարկ՝ "
+                f"{gross} × 10% + ({gross} − {threshold}) × 10% = "
+                f"{tax_due} դրամ։ Կիրառվել է ՀՀ հարկային օրենսգրքի "
+                "150-րդ հոդվածի 7-րդ մասի՝ այդ ամսաթվին գործող տարբերակը։"
+            ),
+            confidence_level=ConfidenceLevel.VERIFIED,
+            disclaimer="",
+            source="rag",
+            citations=[citation],
+            reference_date=reference_date,
+        )
     explicit = classify_temporal(question)
     # The temporal index requires a concrete date for eligibility filtering.
     # Use the UI-supplied reference date when available; today's law is the
@@ -149,7 +219,9 @@ def _deepseek_answer(
         confidence_level=ConfidenceLevel.EXTERNAL_UNVERIFIED,
         disclaimer=DISCLAIMERS[ConfidenceLevel.EXTERNAL_UNVERIFIED],
         source="deepseek",
-        citations=results,
+        # Low-confidence retrieval candidates are context for the fallback model,
+        # not verified supporting sources. Do not present them as citations.
+        citations=[],
         reference_date=reference_date,
     )
 

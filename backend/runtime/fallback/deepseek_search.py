@@ -105,7 +105,12 @@ def ask_deepseek(
 ) -> str | None:
     user_content = question
     if reference_date is not None:
-        user_content = f"As of {reference_date.isoformat()}: {question}"
+        user_content = (
+            f"BINDING REFERENCE DATE: {reference_date.isoformat()}. Answer only "
+            "under the law in force on that date. Do not substitute today's law "
+            "or describe a later amendment as applicable. State the reference date "
+            f"in the answer.\n\nQuestion: {question}"
+        )
     if context_results:
         user_content = (
             f"{user_content}\n\n"
