@@ -1,6 +1,6 @@
-# ARLIS AI
+# ChronoLex
 
-ARLIS AI is an Armenian legal research assistant with a React frontend and a
+ChronoLex is an Armenian legal research assistant with a React frontend and a
 Python retrieval backend. It searches dated ARLIS provisions, filters legal
 versions by the requested date, and returns answers with supporting sources.
 

@@ -50,7 +50,7 @@ const navItems = [
 ]
 
 function Logo({ onClick }) {
-  const content = <><span className="brand-symbol"><i /><i /><i /></span><span>ARLIS <b>AI</b></span></>
+  const content = <><span className="brand-symbol"><i /><i /><i /></span><span>Chrono<b>Lex</b></span></>
   return onClick
     ? <button className="brand brand-home" onClick={onClick} aria-label="Վերադառնալ գլխավոր էջ">{content}</button>
     : <div className="brand">{content}</div>
@@ -208,7 +208,7 @@ function FrontPage({ onContinue }) {
           <div><Calendar selected={selectedDate} onSelect={setSelectedDate} /><button className="calendar-continue" onClick={() => onContinue(question.trim(), selectedDate)}>Շարունակել <Arrow /></button></div>
         </section>}
       </section>
-      <footer>ARLIS AI · Պաշտոնական իրավական աղբյուրների հիման վրա</footer>
+      <footer>ChronoLex · Պաշտոնական իրավական աղբյուրների հիման վրա</footer>
     </main>
   )
 }
