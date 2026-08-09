@@ -152,7 +152,7 @@ class LocalVectorIndex:
         required_intent_terms = query_intent_terms(query)
         unigram_query_terms = [term for term in query_terms if not term.startswith("__phrase__")]
         intent_anchors: set[str] = set()
-        if required_intent_terms:
+        if required_intent_terms and set(tokenize(query)) & ELIGIBILITY_MARKERS:
             generic_intent = set(tokenize(" ".join(ELIGIBILITY_MARKERS))) | required_intent_terms
             topic_terms = [term for term in unigram_query_terms if term not in generic_intent]
             by_rarity = sorted(
@@ -210,13 +210,35 @@ class LocalVectorIndex:
         d_rank, b_rank = dense_rank.get(index), bm25_rank.get(index)
         rrf = (DENSE_RRF_WEIGHT / (RRF_K + d_rank) if d_rank else 0) + (BM25_RRF_WEIGHT / (RRF_K + b_rank) if b_rank else 0)
         chunk = self.chunks[index]
+        article_text = self._complete_article_text(index)
         return RetrievalResult(
-            text=str(chunk["text"]), act_title=str(chunk.get("act_title") or ""), act_type=str(chunk.get("act_type") or ""),
+            text=article_text, act_title=str(chunk.get("act_title") or ""), act_type=str(chunk.get("act_type") or ""),
             article_number=chunk.get("article_number"), source_url=chunk.get("source_url"), valid_from=str(chunk["valid_from"]), valid_to=chunk.get("valid_to"),
             similarity_score=round(dense_score.get(index, 0.0), 6), final_score=round(final, 8), dense_rank=d_rank,
             bm25_score=round(float(bm25_values[index]), 6), bm25_rank=b_rank, rrf_score=round(rrf, 8),
             reranker_score=round(reranker, 6), matched_query_terms=matched,
         )
+
+    def _complete_article_text(self, index: int) -> str:
+        """Join contiguous chunks belonging to the same act article."""
+        chunk = self.chunks[index]
+        article = chunk.get("article_number")
+        act_id = chunk.get("act_id")
+        if not article:
+            return str(chunk["text"])
+        start = index
+        while start > 0:
+            previous = self.chunks[start - 1]
+            if previous.get("act_id") != act_id or previous.get("article_number") != article:
+                break
+            start -= 1
+        end = index + 1
+        while end < len(self.chunks):
+            following = self.chunks[end]
+            if following.get("act_id") != act_id or following.get("article_number") != article:
+                break
+            end += 1
+        return "\n".join(str(part["text"]) for part in self.chunks[start:end])
 
     @staticmethod
     def _is_valid_on(chunk: dict[str, Any], target_date: date) -> bool:

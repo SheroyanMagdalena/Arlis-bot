@@ -25,6 +25,7 @@ answer from the same citations.
 
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from backend.ingestion.embedding_generator import LocalEmbedder
@@ -77,7 +78,7 @@ def run_rollback(
 
     if not is_temporal:
         if is_confident(question, results):
-            return _rag_answer(results, ConfidenceLevel.VERIFIED, reference_date)
+            return _rag_answer(question, results, ConfidenceLevel.VERIFIED, reference_date)
         return _deepseek_answer(question, reference_date, results)
 
     # Temporal: a reference date after the corpus cutoff means the static April-2023
@@ -86,24 +87,53 @@ def run_rollback(
         return _deepseek_answer(question, reference_date, results)
 
     if is_confident(question, results):
-        return _rag_answer(results, ConfidenceLevel.GROUNDED_BUT_DATED, reference_date)
+        return _rag_answer(question, results, ConfidenceLevel.GROUNDED_BUT_DATED, reference_date)
 
     return _deepseek_answer(question, reference_date, results)
 
 
 def _rag_answer(
+    question: str,
     results: list[RetrievalResult],
     level: ConfidenceLevel,
     reference_date: date | None,
 ) -> RollbackAnswer:
+    generated = ask_deepseek(
+        question,
+        reference_date=reference_date,
+        context_results=results,
+    )
+    if generated:
+        generated = _concise(generated)
+    fallback = results[0].text.strip()
+    if len(fallback) > 600:
+        fallback = fallback[:600].rsplit(" ", 1)[0] + "…"
     return RollbackAnswer(
-        answer=results[0].text,
+        answer=generated or fallback,
         confidence_level=level,
         disclaimer=DISCLAIMERS[level],
         source="rag",
         citations=results,
         reference_date=reference_date,
     )
+
+
+def _concise(text: str, limit: int = 700) -> str:
+    clean = re.sub(r"\s+", " ", text).strip()
+    if len(clean) <= limit:
+        return clean
+    sentences = re.split(r"(?<=[։.!?])\s+", clean)
+    kept: list[str] = []
+    length = 0
+    for sentence in sentences:
+        addition = len(sentence) + (1 if kept else 0)
+        if kept and length + addition > limit:
+            break
+        kept.append(sentence)
+        length += addition
+    if kept:
+        return " ".join(kept)
+    return clean[:limit].rsplit(" ", 1)[0] + "…"
 
 
 def _deepseek_answer(

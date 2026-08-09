@@ -23,8 +23,11 @@ _SYSTEM_PROMPT = (
     "database that scored below the confidence threshold -- they are leads, not "
     "confirmed answers. Use any excerpt that is actually relevant, citing it by "
     "act title and article number. Where the excerpts are missing, insufficient, "
-    "or irrelevant, fill the gap with general knowledge and say so explicitly.\n\n"
-    "OUTPUT STRUCTURE (3-6 sentences total):\n"
+    "or irrelevant, fill the gap with general knowledge and say so explicitly. "
+    "Prefer the current codified act over separate historical amending acts when "
+    "they appear to conflict.\n\n"
+    "OUTPUT STRUCTURE: 2-4 concise sentences, no headings or Markdown, and no more "
+    "than 600 characters total.\n"
     "1. Direct answer — grounded in the provided ARLIS excerpts wherever they "
     "apply, supplemented by general knowledge where they don't.\n"
     "2. Legal basis — name the specific Armenian law or act that governs this, "
@@ -33,8 +36,10 @@ _SYSTEM_PROMPT = (
     "3. Confidence — state plainly which parts came from the ARLIS excerpts "
     "(more reliable) versus general knowledge (less reliable, possibly "
     "outdated).\n\n"
-    "CONSTRAINT: Never invent a specific number, date, or article citation you are "
-    "not confident about — say it needs verification instead of guessing."
+    "CONSTRAINT: Read every supplied excerpt through its end before answering. "
+    "Never claim that a legal basis is absent when it appears later in an excerpt. "
+    "Never invent a specific number, date, or article citation you are not confident "
+    "about — say it needs verification instead of guessing."
 )
 
 _RELEVANCE_SYSTEM_PROMPT = (
@@ -76,7 +81,7 @@ def _chat_completion(
 
 
 _MAX_CONTEXT_EXCERPTS = 3
-_MAX_EXCERPT_CHARS = 500
+_MAX_EXCERPT_CHARS = 3000
 
 
 def _format_context(results: list[RetrievalResult]) -> str:

@@ -183,6 +183,11 @@ function resolveQuestionDate(text) {
   return null
 }
 
+function resolveQuestionYears(text) {
+  return [...new Set([...text.matchAll(/\b(?:19|20)\d{2}\b/g)].map(match => Number(match[0])))]
+    .filter(year => year >= 1990 && year <= new Date().getFullYear())
+}
+
 function FrontPage({ onContinue }) {
   const [question, setQuestion] = useState('')
   const [needsDate, setNeedsDate] = useState(false)
@@ -190,8 +195,13 @@ function FrontPage({ onContinue }) {
   const submit = (event) => {
     event.preventDefault()
     if (!question.trim()) return
+    const years = resolveQuestionYears(question)
+    if (years.length > 1) {
+      onContinue(question.trim(), new Date(years[0], 0, 1), years)
+      return
+    }
     const detected = resolveQuestionDate(question)
-    if (detected) onContinue(question.trim(), detected)
+    if (detected) onContinue(question.trim(), detected, [])
     else setNeedsDate(true)
   }
   return (
@@ -213,8 +223,9 @@ function FrontPage({ onContinue }) {
   )
 }
 
-function ResearchWorkspace({ initialQuestion, initialDate, onBack }) {
+function ResearchWorkspace({ initialQuestion, initialDate, initialYears = [], onBack }) {
   const question = initialQuestion
+  const comparisonYears = initialYears.length > 1 ? initialYears : []
   const [selectedDate, setSelectedDate] = useState(initialDate)
   const [stage, setStage] = useState(3)
   const [researchData, setResearchData] = useState(null)
@@ -226,22 +237,60 @@ function ResearchWorkspace({ initialQuestion, initialDate, onBack }) {
     setStage(3)
   }
   const targetDate = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
+  const targetDates = comparisonYears.length
+    ? comparisonYears.map(year => `${year}-01-01`)
+    : [targetDate]
   useEffect(() => {
     const controller = new AbortController()
     setLoading(true); setError(''); setResearchData(null); setSelectedSourceIndex(0)
-    fetch(`${import.meta.env.VITE_API_URL || ''}/api/research`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
-      body: JSON.stringify({ question, target_date: targetDate, top_k: 5 }),
-    }).then(async response => {
-      if (!response.ok) throw new Error((await response.json()).detail || 'Որոնումը չհաջողվեց')
-      return response.json()
+    const fetchYears = async () => {
+      const responses = []
+      for (const [index, date] of targetDates.entries()) {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/research`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
+          body: JSON.stringify({
+            question: comparisonYears.length ? `${question}\nՊատասխանիր միայն ${comparisonYears[index]} թվականի համար։` : question,
+            target_date: date,
+            top_k: 5,
+          }),
+        })
+        const body = await response.text()
+        if (!body) throw new Error('Իրավական որոնման API-ն դատարկ պատասխան վերադարձրեց։')
+        let data
+        try {
+          data = JSON.parse(body)
+        } catch {
+          throw new Error('Իրավական որոնման API-ն անվավեր պատասխան վերադարձրեց։')
+        }
+        if (!response.ok) throw new Error(data.detail || 'Որոնումը չհաջողվեց')
+        responses.push(data)
+      }
+      return responses
+    }
+    fetchYears().then(responses => {
+      if (!comparisonYears.length) return responses[0]
+      const results = responses.flatMap((data, index) => (data.results || []).map(result => ({
+        ...result,
+        act_title: `${comparisonYears[index]} · ${result.act_title}`,
+      })))
+      const answers = responses.map((data, index) => {
+        const answer = data.simplified_answer || data.results?.[0]?.text
+        return `${comparisonYears[index]} — ${answer || 'Համապատասխան դրույթ չի գտնվել։'}`
+      })
+      return {
+        results,
+        source_count: results.length,
+        confidence_level: responses.some(data => data.confidence_level === 'EXTERNAL_UNVERIFIED') ? 'EXTERNAL_UNVERIFIED' : responses[0]?.confidence_level,
+        simplified_answer: answers.join('\n\n'),
+        warning: responses.map(data => data.warning).find(Boolean),
+      }
     }).then(data => { setResearchData(data); setStage(3) }).catch(reason => {
       if (reason.name !== 'AbortError') setError(reason.message)
     }).finally(() => {
       if (!controller.signal.aborted) setLoading(false)
     })
     return () => controller.abort()
-  }, [question, targetDate])
+  }, [question, targetDate, comparisonYears.join(',')])
   const topResult = researchData?.results?.[selectedSourceIndex] || researchData?.results?.[0]
   return (
     <main className="app-shell">
@@ -252,11 +301,11 @@ function ResearchWorkspace({ initialQuestion, initialDate, onBack }) {
         <h1>{question}</h1>
         <Progress stage={stage} />
         <section className="temporal-section">
-          <div className="section-intro"><span>Ժամանակային համատեքստ</span><h2>Ո՞ր ժամանակահատվածին է վերաբերում հարցը։</h2><p>Ընտրեք ամսաթիվը, որպեսզի գտնենք այդ օրը գործող օրենսդրությունը։</p></div>
-          <div className="date-layout">
+          <div className="section-intro"><span>Ժամանակային համատեքստ</span><h2>{comparisonYears.length ? 'Բազմամյա համեմատություն' : 'Ո՞ր ժամանակահատվածին է վերաբերում հարցը։'}</h2><p>{comparisonYears.length ? 'Հարցում նշված յուրաքանչյուր տարվա օրենսդրությունը ստուգվում է առանձին։' : 'Ընտրեք ամսաթիվը, որպեսզի գտնենք այդ օրը գործող օրենսդրությունը։'}</p></div>
+          {comparisonYears.length ? <div className="comparison-years">{comparisonYears.map(year => <span key={year}>{year}</span>)}</div> : <div className="date-layout">
             <div className="selected-date"><span>Ընտրված ամսաթիվ</span><strong>{formatDate(selectedDate)}</strong><p><Icon name="check" /> Ամսաթիվը հաստատված է</p><small>Օրենսդրությունը կստուգվի հենց այս օրվա դրությամբ։</small></div>
             <div><Calendar selected={selectedDate} onSelect={chooseDate} /><p className="calendar-note"><Icon name="check" /> Ընտրված ամսաթվի դրությամբ կկիրառվի գործող օրենսդրությունը։</p></div>
-          </div>
+          </div>}
         </section>
         <section className={`legal-result ${stage === 4 ? 'answer-open' : ''} ${loading ? 'is-loading' : ''}`} key={`${targetDate}-${stage}`}>
           <Icon name="scales" /><div><span>{stage === 4 ? 'Պաշտոնական իրավական տեքստ' : 'Պարզեցված պատասխան'}</span>{loading ? <><h3>Պատրաստվում է աղբյուրներով հիմնավորված պատասխանը…</h3><p>Նախ զտվում և դասակարգվում են իրավական դրույթները, ապա պատասխանը կազմվում է միայն ընտրված աղբյուրներից։</p></> : error ? <><h3>Չհաջողվեց միանալ իրավական որոնման API-ին</h3><p>{error}</p></> : stage === 4 && topResult ? <><button className="result-back" onClick={() => setStage(3)}><Arrow left /> Վերադառնալ պատասխանին</button><h3>{topResult.act_title}{topResult.article_number ? ` · Հոդված ${topResult.article_number}` : ''}</h3><p>{topResult.text}</p><div className="live-meta"><span>{topResult.act_type || 'Իրավական ակտ'}</span><span>Ուժի մեջ՝ {topResult.valid_from}{topResult.valid_to ? ` — ${topResult.valid_to}` : ''}</span></div></> : researchData?.simplified_answer ? <><h3>Պատասխան՝ ըստ ընտրված ամսաթվի</h3><p className="generated-answer">{researchData.simplified_answer}</p><div className="answer-sources">Հիմնված է {researchData.source_count || 0} իրավական աղբյուրի վրա</div>{topResult && <button onClick={() => setStage(4)}>Տեսնել հիմնական աղբյուրը <Arrow /></button>}</> : topResult ? <><h3>Պարզեցված պատասխանը հասանելի չէ</h3><p className="generated-answer">AI մոդելը պատասխան չի վերադարձրել։ Կարող եք բացել ամենահամապատասխան պաշտոնական դրույթը։</p><div className="answer-sources">Հիմնված է {researchData.source_count} իրավական աղբյուրի վրա</div><button onClick={() => setStage(4)}>Տեսնել հիմնական աղբյուրը <Arrow /></button></> : <><h3>Համապատասխան գործող դրույթ չի գտնվել</h3><p>Փորձեք վերաձևակերպել հարցը կամ ընտրել այլ ամսաթիվ։</p></>}</div>
@@ -271,8 +320,8 @@ function ResearchWorkspace({ initialQuestion, initialDate, onBack }) {
 
 function App() {
   const [research, setResearch] = useState(null)
-  if (!research) return <FrontPage onContinue={(question, date) => setResearch({ question, date })} />
-  return <ResearchWorkspace initialQuestion={research.question} initialDate={research.date} onBack={() => setResearch(null)} />
+  if (!research) return <FrontPage onContinue={(question, date, years = []) => setResearch({ question, date, years })} />
+  return <ResearchWorkspace initialQuestion={research.question} initialDate={research.date} initialYears={research.years} onBack={() => setResearch(null)} />
 }
 
 export default App

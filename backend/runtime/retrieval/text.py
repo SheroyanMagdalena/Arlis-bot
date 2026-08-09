@@ -32,11 +32,14 @@ QUERY_STOPWORDS = {
 
 ELIGIBILITY_MARKERS = {"օգտվել", "իրավասու", "շահառու", "ընդգրկվել"}
 ELIGIBILITY_EVIDENCE = {"իրավունք", "իրավասու", "շահառու", "ընդգրկվել", "պայման", "չափանիշ"}
+DISMISSAL_MARKERS = {"ազատել", "ազատվել", "ազատում"}
 
 # Small domain lexicon that maps citizens' wording to recurring statutory wording.
 # It is retrieval-only and never changes the question shown to the answer model.
 LEGAL_CONCEPT_EXPANSIONS = {
-    "ազատվել": ("աշխատանքային պայմանագիր", "պայմանագրի լուծում", "գործատու", "աշխատող"),
+    "ազատվել": ("աշխատանքային պայմանագիր", "պայմանագրի լուծում", "գործատուի նախաձեռնությամբ", "աշխատանքային օրենսգիրք"),
+    "ազատել": ("աշխատանքային պայմանագիր", "պայմանագրի լուծում", "գործատուի նախաձեռնությամբ", "աշխատանքային օրենսգիրք"),
+    "ազատում": ("աշխատանքային պայմանագիր", "պայմանագրի լուծում", "գործատուի նախաձեռնությամբ", "աշխատանքային օրենսգիրք"),
     "վերջնահաշվարկ": ("աշխատավարձ", "վճարում", "պայմանագրի լուծում", "գործատու"),
 }
 
@@ -90,6 +93,8 @@ def query_intent_terms(query: str) -> set[str]:
     words = set(tokenize(query))
     if words & ELIGIBILITY_MARKERS:
         return {_light_stem(term) for term in ELIGIBILITY_EVIDENCE}
+    if "գործատու" in words and words & DISMISSAL_MARKERS:
+        return {"__phrase__գործատու_նախաձեռնությամբ"}
     return set()
 
 

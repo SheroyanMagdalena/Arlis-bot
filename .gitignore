@@ -5,6 +5,7 @@ data/structured/vector_index*/
 data/raw/*
 node_modules/
 dist/
+.*-live.*.log
 .env
 .env.*
 !.env.example

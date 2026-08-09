@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 
 from backend.ingestion.article_chunker import chunk_document
+from backend.runtime.retrieval.text import prepare_query, query_intent_terms
 from backend.runtime.retrieval.vector_search import LocalVectorIndex, cosine_scores
 
 
@@ -28,6 +29,17 @@ class FakeEmbedder:
 
 
 class RetrievalTests(unittest.TestCase):
+    def test_dismissal_wording_expands_to_labor_law_terms(self):
+        _, terms = prepare_query(
+            "Գործատուն ինձ ազատել է աշխատանքից կենսաթոշակային տարիքի պատճառով"
+        )
+        self.assertIn("օրենսգիրք", terms)
+        self.assertIn("լուծում", terms)
+        self.assertEqual(
+            query_intent_terms("Գործատուն ինձ ազատել է աշխատանքից"),
+            {"__phrase__գործատու_նախաձեռնությամբ"},
+        )
+
     def test_article_chunk_metadata(self):
         chunks = list(chunk_document({
             "act_id": "1", "title": "Օրենք", "source_url": "https://example.test/1",

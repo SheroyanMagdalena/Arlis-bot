@@ -3,7 +3,7 @@ from datetime import date
 from unittest.mock import patch
 
 from backend.runtime.clarification.schemas import ClarificationRequest
-from backend.runtime.pipeline import run_rollback
+from backend.runtime.pipeline import _concise, run_rollback
 from backend.runtime.reasoning.schemas import RollbackAnswer
 from backend.runtime.retrieval.schemas import RetrievalResult
 from backend.runtime.verification.confidence_checker import ConfidenceLevel
@@ -28,6 +28,12 @@ def _result(similarity_score: float, text: str = "Հոդվածի տեքստ") ->
 
 
 class RollbackPipelineTests(unittest.TestCase):
+    def test_generated_answer_is_limited_at_sentence_boundary(self):
+        sentence = "Սա կարճ նախադասություն է։ "
+        answer = _concise(sentence * 50, limit=100)
+        self.assertLessEqual(len(answer), 100)
+        self.assertTrue(answer.endswith("։"))
+
     def test_non_temporal_confident_question_is_verified(self):
         index = FakeIndex([_result(
             0.9, text="Աշխատանքային օրենսգիրքը սահմանում է աշխատանքային հարաբերությունները"
@@ -35,11 +41,12 @@ class RollbackPipelineTests(unittest.TestCase):
         with patch(
             "backend.runtime.verification.confidence_checker.check_relevance",
             return_value=True,
-        ):
+        ), patch("backend.runtime.pipeline.ask_deepseek", return_value="Պարզ պատասխան"):
             result = run_rollback("Ի՞նչ է աշխատանքային օրենսգիրքը", index, embedder=None)
         self.assertIsInstance(result, RollbackAnswer)
         self.assertEqual(result.confidence_level, ConfidenceLevel.VERIFIED)
         self.assertEqual(result.source, "rag")
+        self.assertEqual(result.answer, "Պարզ պատասխան")
 
     def test_non_temporal_low_confidence_falls_back_to_deepseek(self):
         index = FakeIndex([_result(0.2)])
@@ -74,7 +81,7 @@ class RollbackPipelineTests(unittest.TestCase):
         with patch(
             "backend.runtime.verification.confidence_checker.check_relevance",
             return_value=True,
-        ):
+        ), patch("backend.runtime.pipeline.ask_deepseek", return_value="Պարզ պատասխան"):
             result = run_rollback(
                 "Որքա՞ն է մանկական նպաստի չափը",
                 index,
@@ -147,7 +154,7 @@ class RollbackPipelineTests(unittest.TestCase):
         with patch(
             "backend.runtime.verification.confidence_checker.check_relevance",
             return_value=True,
-        ):
+        ), patch("backend.runtime.pipeline.ask_deepseek", return_value="Պարզ պատասխան"):
             result = run_rollback(
                 "Ի՞նչ է աշխատանքային օրենսգիրքը",
                 index,

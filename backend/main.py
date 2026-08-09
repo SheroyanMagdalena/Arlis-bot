@@ -79,7 +79,10 @@ def _answer_to_research_response(answer: RollbackAnswer) -> dict:
         if answer.disclaimer:
             response["warning"] = answer.disclaimer
     else:
-        response["simplified_answer"] = None
+        # A confident RAG answer already contains the best grounded provision.
+        # Do not discard it: the frontend otherwise claims that no answer was
+        # returned even though the pipeline produced one.
+        response["simplified_answer"] = answer.answer or None
         if answer.disclaimer:
             response["warning"] = answer.disclaimer
     return response
