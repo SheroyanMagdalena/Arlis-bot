@@ -1,0 +1,11 @@
+.git
+.venv
+**/__pycache__
+**/*.pyc
+apps/web/node_modules
+apps/web/dist
+data/structured/*
+!data/structured/render_index
+!data/structured/render_index/**
+.env
+apps/web/.env

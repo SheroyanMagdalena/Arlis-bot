@@ -1,311 +1,194 @@
-# ARLIS Assistant
+# ARLIS AI
 
-ARLIS Assistant is a local-first Armenian legal-document retrieval project. It
-reads the ARLIS JSONL dump, normalizes legal records, splits documents into
-article-aware chunks, creates multilingual embeddings, and returns the five
-most relevant chunks for a natural-language question.
+ARLIS AI is an Armenian legal research assistant with a React frontend and a
+Python retrieval backend. It searches dated ARLIS provisions, filters legal
+versions by the requested date, and returns answers with supporting sources.
 
-The current project is a retrieval baseline. It retrieves source material but
-does not yet generate legal advice or a final synthesized answer.
+The repository is a monorepo: the frontend and backend are deployed directly
+from this repository. A separate backend repository is not required.
 
-The repository also includes an interactive ARLIS AI frontend prototype. It
-demonstrates the intended landing page, structured-answer workspace, legal
-evidence panel, source highlighting, clarifying questions, and responsive
-mobile behavior using representative content. It is not yet connected to the
-Python retrieval pipeline.
-
-## Frontend prototype
-
-### Run the combined application
-
-Install dependencies once:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-cd apps\web
-npm.cmd install
-cd ..\..
-```
-
-Then start the retrieval API and frontend together from the project root:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\run_live.ps1
-```
-
-Open `http://127.0.0.1:5173`. Keep the terminal open and press `Ctrl+C` to
-stop both services. The first launch may take about a minute while the index,
-model, and legacy validity metadata are loaded; later launches use a generated
-metadata cache.
-
-From the VS Code PowerShell terminal:
-
-```powershell
-cd apps/web
-npm.cmd install
-npm.cmd run dev
-```
-
-Open the local address printed by Vite, normally
-`http://localhost:5173`. Submit a suggested question to enter the legal
-research workspace. Hover or click cited answer text to highlight its
-supporting provision; on smaller screens, citations open the evidence drawer.
-
-Create a production build with:
-
-```powershell
-npm.cmd run build
-```
-
-## Implemented pipeline
+## Project structure
 
 ```text
-ARLIS JSONL.XZ dump
-    -> streaming parser
-    -> dated Armenian legislation selection
-    -> article-aware chunks
-    -> multilingual E5 embeddings
-    -> local NumPy vector index
-    -> target-date resolution
-    -> validity filtering
-    -> top-5 cosine-similarity results from valid versions only
+apps/web/                         React + Vite frontend
+backend/                          Python retrieval API and pipeline
+data/structured/vector_index/    Full local index (not committed)
+data/structured/render_index/    Compact 9-provision deployment index
+scripts/                          Data, search, and local-run utilities
+render.yaml                       Render Blueprint configuration
 ```
 
-Each retrieval result contains:
+## Local setup
 
-```json
-{
-  "text": "Relevant legal text...",
-  "act_title": "ՀՀ ԱՇԽԱՏԱՆՔԱՅԻՆ ՕՐԵՆՍԳԻՐՔ",
-  "act_type": "Օրենսգիրք",
-  "article_number": "113",
-  "valid_from": "2015-07-01",
-  "valid_to": null,
-  "source_url": "https://pdf.arlis.am/...",
-  "similarity_score": 0.82
-}
-```
-
-`article_number` is `null` when the source uses numbered clauses rather than
-formal articles.
-
-## Data
-
-The project currently uses the following files under `data/raw/`:
-
-- `arlis_documents.jsonl.xz` — complete compressed ARLIS document dump
-- `arlis_metadata.jsonl` — expanded metadata dump
-- `arlis_metadata.jsonl.xz` — original compressed metadata dump
-
-The parser reads the full document dump directly from XZ, so the approximately
-24.6 GB expanded file is not required.
-
-The recommended retrieval corpus includes active Armenian laws and codes. It
-currently resolves to:
-
-- 4,845 deduplicated documents
-- 64,924 chunks
-- 59,473 article-labelled chunks
-
-The raw dumps and generated vector indexes are local artifacts and are not
-intended to be committed to GitHub.
-
-## Setup
-
-From PowerShell in the project root:
+From a PowerShell terminal in the repository root:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+cd apps\web
+npm.cmd install
+cd ..\..
 ```
 
-The embedding model is `intfloat/multilingual-e5-small`. It is free and runs
-locally. The first use downloads the model; subsequent use can work offline.
+Create a root `.env` file containing your model-provider key:
 
-If PowerShell prevents virtual-environment activation, run commands directly
-with:
+```dotenv
+API_KEY=your_api_key
+```
+
+Never commit `.env`.
+
+## Run locally
+
+Start the backend and frontend together:
 
 ```powershell
-.\.venv\Scripts\python.exe <command>
+powershell -ExecutionPolicy Bypass -File scripts\run_live.ps1
 ```
 
-## Parse and look up an act
+Open `http://127.0.0.1:5173`.
 
-Look up an act by number:
+The backend can also be started separately:
 
 ```powershell
-python scripts/query_arlis.py "N 218"
+.\.venv\Scripts\python.exe -m backend.main `
+  --index data\structured\vector_index
 ```
 
-Interactive lookup:
+Then start the frontend in another terminal:
 
 ```powershell
-python scripts/query_arlis.py
+cd apps\web
+npm.cmd run dev
 ```
 
-Useful options:
+## Date-aware questions
 
-```powershell
-# Print the complete act text
-python scripts/query_arlis.py "N 218" --full-text
-
-# Return every matching record when an act number is reused
-python scripts/query_arlis.py "N 218" --all
-```
-
-Act numbers are not unique. For example, `N 218` occurs in multiple years and
-issuing bodies. The default lookup returns the first dump match; `--all`
-returns all exact matches.
-
-## Build a vector index
-
-Build the temporal corpus. It includes dated Armenian laws, codes, government
-decisions, orders, decrees, and directives instead of only the latest active
-law/code snapshots:
-
-```powershell
-python scripts/rebuild_index.py --corpus temporal
-```
-
-Build a smaller development index:
-
-```powershell
-python scripts/rebuild_index.py `
-  --corpus temporal `
-  --max-documents 100 `
-  --output data/structured/vector_index_demo
-```
-
-The full CPU build is long-running. The current implementation writes the
-index only after embedding finishes and is not yet resumable. Do not rely on a
-partial build surviving interruption. Incremental checkpointing is the next
-planned improvement.
-
-### Current index status
-
-The full recommended index was built successfully and exists at:
+If a question contains a date, the frontend automatically fills the calendar
+and sends that date to the backend. For example:
 
 ```text
-data/structured/vector_index
+Որքա՞ն էր նվազագույն ամսական աշխատավարձը 2021 թվականի հոկտեմբերին։
 ```
 
-It contains 64,924 chunk records and a matching `64,924 x 384` embedding
-matrix. A smaller 20-document demo index also exists at:
+If a date-dependent question does not contain a date, the UI asks the user to
+select one. Relative expressions such as `հիմա` use the current date.
+
+## Data and retrieval
+
+The full local temporal index contains approximately 64,933 chunks and uses
+`intfloat/multilingual-e5-small` embeddings combined with BM25 retrieval. It is
+not committed because it is approximately 224 MB.
+
+The deployed demo uses `data/structured/render_index`, containing nine curated
+legal provisions. Render uses lightweight BM25-first retrieval so the service
+fits within the free instance's 512 MiB memory limit. Local full-index usage
+continues to use the multilingual embedding model.
+
+The source corpus was last updated in April 2023. Results and externally
+generated answers must be checked against the cited ARLIS source before use.
+
+## API
+
+Health check:
+
+```http
+GET /api/health
+```
+
+Research request:
+
+```http
+POST /api/research
+Content-Type: application/json
+
+{
+  "question": "Որքա՞ն էր նվազագույն աշխատավարձը 2021 թվականին։",
+  "target_date": "2021-10-01",
+  "top_k": 5
+}
+```
+
+## Frontend deployment on Vercel
+
+Deploy the `demo` branch from this repository and use `apps/web` as the
+frontend application. Set the production environment variable after Render
+assigns the backend URL:
+
+```dotenv
+VITE_API_URL=https://your-render-service.onrender.com
+```
+
+Redeploy Vercel after adding or changing this value.
+
+## Backend deployment on Render
+
+Create a Render Blueprint from this repository and select the `demo` branch.
+Render reads `render.yaml`, installs `requirements-render.txt`, and starts the
+compact backend with:
 
 ```text
-data/structured/vector_index_demo
+python -m backend.main --index data/structured/render_index --lexical-only
 ```
 
-## Search
+Set `API_KEY` when Render prompts for it. The Blueprint configures
+`FRONTEND_ORIGINS=https://arlis-ai.am` and the `/api/health` health check.
 
-Every search requires a target date. Date detection happens before retrieval;
-the vector ranker never sees a legal version that is invalid on that date.
-Provide a date directly in the question:
+If a previous transformer-based deployment exceeded 512 MiB, choose
+**Manual Deploy → Clear build cache & deploy** and confirm Render is deploying
+commit `cfa5710` or newer.
+
+## Reproduce Render memory usage with Docker
+
+Build and run the Render-equivalent image with a strict 512 MiB limit:
 
 ```powershell
-python scripts/search_arlis.py `
-  "Ի՞նչ էր նախատեսում աշխատանքային օրենսգիրքը 12.05.2021-ին" `
-  --index data/structured/vector_index
+docker build -f Dockerfile.render -t arlis-render-memory-test .
+docker run -d --name arlis-memory-test `
+  --memory 512m --memory-swap 512m `
+  -p 8765:8000 --env-file .env `
+  arlis-render-memory-test
+docker stats arlis-memory-test
 ```
 
-Or pass it explicitly:
+Check the service:
 
 ```powershell
-python scripts/search_arlis.py `
-  "Որքա՞ն է փորձաշրջանի առավելագույն ժամկետը" `
-  --date 2021-05-12 `
-  --index data/structured/vector_index
+Invoke-RestMethod http://127.0.0.1:8765/api/health
 ```
 
-When neither the question nor `--date` contains a complete date, the CLI asks
-for one before loading and searching the index. The web prototype opens a
-calendar at the same point in the flow.
-
-Search an existing full index:
+The lightweight container measured approximately 29–30 MiB locally at idle
+and after a test request. Stop and remove it with:
 
 ```powershell
-$env:PYTHONUTF8="1"
-python scripts/search_arlis.py `
-  "Կարո՞ղ է գործատուն ինձ ազատել աշխատանքից առանց նախազգուշացման։" `
-  --index data/structured/vector_index
+docker rm -f arlis-memory-test
 ```
 
-Search the current demo index:
+## Production build and tests
+
+Build the frontend:
 
 ```powershell
-python scripts/search_arlis.py `
-  "գարնանային զորակոչի կազմակերպում" `
-  --index data/structured/vector_index_demo
+cd apps\web
+npm.cmd run build
 ```
 
-Interactive search:
+Run the main backend tests from the repository root:
 
 ```powershell
-$env:PYTHONUTF8="1"
-python scripts/search_arlis.py --index data/structured/vector_index
+.\.venv\Scripts\python.exe -m unittest `
+  tests.runtime.test_temporal `
+  tests.runtime.test_confidence_checker `
+  tests.runtime.test_pipeline_rollback `
+  tests.retrieval.test_vector_search
 ```
-
-At the `Question:` prompt, enter an Armenian legal question and press Enter.
-The model and index remain loaded so additional questions can be tested in the
-same session. Press `Ctrl+C` to stop. Setting `PYTHONUTF8` prevents Armenian
-output errors in Windows PowerShell and the VS Code terminal.
-
-Example questions:
-
-```text
-Եթե աշխատանքի ընթացքում վնասվածք եմ ստացել, ի՞նչ պետք է անեմ։
-Որքա՞ն է փորձաշրջանի առավելագույն տևողությունը։
-```
-
-The demo index is useful for pipeline testing but does not contain enough law
-to answer arbitrary legal questions reliably. Search quality should be judged
-by checking whether the expected act and article appear in the top five, not
-by the similarity score alone.
-
-## Tests
-
-Run the implemented parser and retrieval tests:
-
-```powershell
-python -m unittest `
-  tests.ingestion.test_version_resolver `
-  tests.retrieval.test_vector_search `
-  tests.end_to_end.test_arlis_parser `
-  -v
-```
-
-The test suite covers:
-
-- target-schema parsing
-- real compressed-dump parsing
-- act-number lookup
-- article-aware chunking
-- active Armenian version selection
-- vector-index persistence and ranking
 
 ## Important limitations
 
-- The source dump was last updated in April 2023.
-- The existing active-only vector index predates temporal metadata and must be
-  rebuilt with `--corpus temporal` before date-aware search can return results.
-- `EffectiveDate` and `InterruptDate` determine whether an act is valid on the
-  target date. Exact historical article wording is only available when that
-  historical version exists as a separate record in the source dump.
-- The source contains duplicate snapshots and reused act numbers.
-- Version selection currently uses a deterministic metadata identity and keeps
-  the highest numeric ARLIS identifier.
-- Similarity scores indicate semantic closeness, not legal correctness.
-- Retrieved passages must be checked against the cited ARLIS source.
-- The system does not yet generate answers, verify claims, or validate legal
-  citations.
-- The corpus is limited to the selected active Armenian laws and codes; it is
-  not a comprehensive index of every court or administrative decision in the
-  raw dump.
-
-## Repository safety
-
-Before committing or pushing, make sure Git excludes the local virtual
-environment, API keys, raw ARLIS dumps, generated indexes, and build logs.
-Never commit a populated `.env` or `.env.example` file. Keep only a sanitized
-example containing placeholder values.
+- The Render demo index contains only nine curated provisions and cannot answer
+  arbitrary Armenian legal questions comprehensively.
+- The full source snapshot ends in April 2023; newer questions may use the
+  configured external model fallback.
+- Similarity and confidence indicators do not guarantee legal correctness.
+- Always verify important conclusions against the cited official source.
